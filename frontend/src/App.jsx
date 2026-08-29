@@ -8,11 +8,11 @@ import './App.css';
 
 export default function App() {
   // Config state
-  const [query, setQuery] = useState('Compare the performance of PGVector vs. Milvus for 1M vectors');
-  const [mode, setMode] = useState('simulation');
-  const [provider, setProvider] = useState('gemini');
-  const [apiKey, setApiKey] = useState('');
-  const [tavilyKey, setTavilyKey] = useState('');
+  const [query, setQuery] = useState(() => localStorage.getItem('research_query') || 'Compare the performance of PGVector vs. Milvus for 1M vectors');
+  const [mode, setMode] = useState(() => localStorage.getItem('research_mode') || 'real');
+  const [provider, setProvider] = useState(() => localStorage.getItem('research_provider') || 'gemini');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('research_api_key') || '');
+  const [tavilyKey, setTavilyKey] = useState(() => localStorage.getItem('research_tavily_key') || '');
   
   // Execution status state
   const [isRunning, setIsRunning] = useState(false);
@@ -126,6 +126,27 @@ export default function App() {
       }]);
     }
   };
+
+  // Persist config to localStorage
+  useEffect(() => {
+    localStorage.setItem('research_mode', mode);
+  }, [mode]);
+
+  useEffect(() => {
+    localStorage.setItem('research_provider', provider);
+  }, [provider]);
+
+  useEffect(() => {
+    localStorage.setItem('research_api_key', apiKey);
+  }, [apiKey]);
+
+  useEffect(() => {
+    localStorage.setItem('research_tavily_key', tavilyKey);
+  }, [tavilyKey]);
+
+  useEffect(() => {
+    localStorage.setItem('research_query', query);
+  }, [query]);
 
   // Cleanup on unmount
   useEffect(() => {

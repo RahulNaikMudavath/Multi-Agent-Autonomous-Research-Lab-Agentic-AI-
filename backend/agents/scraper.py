@@ -15,36 +15,60 @@ async def search_and_scrape(query: str, max_results: int = 3) -> List[Dict[str, 
         page = await context.new_page()
         
         try:
-            # We use DuckDuckGo's HTML search interface (fast, minimal JS, scraper friendly)
             encoded_query = urllib.parse.quote_plus(query)
-            search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
-            
-            await page.goto(search_url, timeout=10000)
-            await page.wait_for_selector(".links_main")
-            
-            # Select search result elements
-            elements = await page.query_selector_all(".links_main")
-            
+            yahoo_url = f"https://search.yahoo.com/search?p={encoded_query}"
             search_entries = []
-            for el in elements[:max_results]:
-                title_el = await el.query_selector(".result__a")
-                snippet_el = await el.query_selector(".result__snippet")
+            
+            try:
+                await page.goto(yahoo_url, timeout=12000)
+                await page.wait_for_selector(".algo", timeout=8000)
                 
-                if title_el:
-                    title = await title_el.inner_text()
-                    url = await title_el.get_attribute("href")
-                    # Clean URL if it's redirected through DDG
-                    if url and "uddg=" in url:
-                        url = urllib.parse.unquote(url.split("uddg=")[1].split("&")[0])
+                elements = await page.query_selector_all(".algo")
+                for el in elements[:max_results]:
+                    anchor = await el.query_selector(".compTitle a")
+                    title_h3 = await el.query_selector(".compTitle h3")
+                    snippet_div = await el.query_selector(".compText")
                     
-                    snippet = await snippet_el.inner_text() if snippet_el else ""
+                    if anchor and title_h3:
+                        url = await anchor.get_attribute("href")
+                        title = await title_h3.inner_text()
+                        snippet = await snippet_div.inner_text() if snippet_div else ""
+                        
+                        if title and url:
+                            search_entries.append({
+                                "title": title.strip(),
+                                "url": url,
+                                "snippet": snippet.strip()
+                            })
+            except Exception as ey:
+                print(f"Yahoo Search failed: {ey}. Falling back to DuckDuckGo...")
+                
+            if not search_entries:
+                search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
+                try:
+                    await page.goto(search_url, timeout=10000)
+                    await page.wait_for_selector(".links_main", timeout=5000)
                     
-                    if title and url:
-                        search_entries.append({
-                            "title": title,
-                            "url": url,
-                            "snippet": snippet
-                        })
+                    elements = await page.query_selector_all(".links_main")
+                    for el in elements[:max_results]:
+                        title_el = await el.query_selector(".result__a")
+                        snippet_el = await el.query_selector(".result__snippet")
+                        
+                        if title_el:
+                            title = await title_el.inner_text()
+                            url = await title_el.get_attribute("href")
+                            if url and "uddg=" in url:
+                                url = urllib.parse.unquote(url.split("uddg=")[1].split("&")[0])
+                            snippet = await snippet_el.inner_text() if snippet_el else ""
+                            
+                            if title and url:
+                                search_entries.append({
+                                    "title": title,
+                                    "url": url,
+                                    "snippet": snippet
+                                })
+                except Exception as eddg:
+                    print(f"DuckDuckGo fallback search failed too: {eddg}")
             
             # Now, scrape the content of each URL
             for entry in search_entries:

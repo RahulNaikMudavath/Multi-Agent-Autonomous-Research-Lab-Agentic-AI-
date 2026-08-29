@@ -1,10 +1,13 @@
 import json
 import logging
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from backend.agents.graph import graph
 from backend.agents.mock_graph import run_mock_research
 
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,10 @@ async def websocket_research(websocket: WebSocket):
                     await websocket.send_text(state_str)
             else:
                 # Real execution using LangGraph
+                provider_key_name = "GEMINI_API_KEY" if provider == "gemini" else "OPENAI_API_KEY"
+                effective_api_key = api_key or os.getenv(provider_key_name)
+                effective_tavily_key = tavily_key or os.getenv("TAVILY_API_KEY")
+                
                 state = {
                     "query": query,
                     "research_plan": None,
@@ -65,8 +72,8 @@ async def websocket_research(websocket: WebSocket):
                 config = {
                     "configurable": {
                         "provider": provider,
-                        "api_key": api_key,
-                        "tavily_key": tavily_key,
+                        "api_key": effective_api_key,
+                        "tavily_key": effective_tavily_key,
                         "websocket": websocket,
                         "queue": queue
                     }
@@ -146,8 +153,13 @@ async def websocket_research(websocket: WebSocket):
                     await websocket.send_text(json.dumps({"error": "Query cannot be empty."}))
                     continue
                     
-                if mode == "real" and not api_key:
-                    await websocket.send_text(json.dumps({"error": "API Key is required for Real Mode."}))
+                provider_key_name = "GEMINI_API_KEY" if provider == "gemini" else "OPENAI_API_KEY"
+                effective_api_key = api_key or os.getenv(provider_key_name)
+                
+                if mode == "real" and not effective_api_key:
+                    await websocket.send_text(json.dumps({
+                        "error": f"API Key is required for Real Mode. Please provide it in settings or set {provider_key_name} in backend/.env"
+                    }))
                     continue
                 
                 research_task = asyncio.create_task(

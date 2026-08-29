@@ -18,7 +18,11 @@ export default function ControlPanel({
   onStart, 
   onStop 
 }) {
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(() => {
+    const storedKey = localStorage.getItem('research_api_key') || '';
+    const storedMode = localStorage.getItem('research_mode') || 'real';
+    return storedMode === 'real' && !storedKey;
+  });
   const [revisionText, setRevisionText] = useState('');
 
   const handleSubmit = (e) => {
@@ -176,10 +180,17 @@ export default function ControlPanel({
               </div>
             )}
             
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
-              {mode === 'simulation' 
-                ? '💡 Simulation Mode runs a realistic, cyclic multi-agent run with mock data. Zero API keys required.'
-                : '⚡ Real Agent Mode spawns active LangGraph pipelines using live API calls and search scrapes.'}
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div>
+                {mode === 'simulation' 
+                  ? '💡 Simulation Mode runs a realistic, cyclic multi-agent run with mock data. Zero API keys required.'
+                  : '⚡ Real Agent Mode spawns active LangGraph pipelines using live API calls and search scrapes.'}
+              </div>
+              {mode === 'real' && (
+                <div style={{ color: 'var(--accent-cyan)', opacity: 0.85 }}>
+                  🔑 Tip: You can also set <code>GEMINI_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>TAVILY_API_KEY</code> in a <code>backend/.env</code> file to skip entering them here.
+                </div>
+              )}
             </div>
           </div>
         )}

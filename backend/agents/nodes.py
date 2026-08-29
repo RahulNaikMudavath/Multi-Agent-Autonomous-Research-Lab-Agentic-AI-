@@ -14,7 +14,7 @@ def get_llm(config: RunnableConfig):
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash", 
+            model="gemini-3.6-flash", 
             google_api_key=api_key,
             temperature=0.2
         )
@@ -177,7 +177,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
         
         return {
             "research_results": results,
-            # We store the synthesized markdown summary inside research_results list under a special tag, or as state update
+            "research_synthesis": synthesis_res.content,
             "logs": logs,
             "active_agent": "Writer"
         }
@@ -217,11 +217,17 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
                 feedback_context += f"\n\nFACT-CHECKER CORRECTIONS REQUIRED:\n{last_check.get('details', '')}"
                 logs.append({"agent": "Writer", "status": "drafting", "message": "Correcting factual discrepancies identified by Fact-Checker..."})
 
+        synthesis_context = ""
+        research_synthesis = state.get("research_synthesis", "")
+        if research_synthesis:
+            synthesis_context = f"\n\nRESEARCH FINDINGS SYNTHESIS:\n{research_synthesis}"
+
         prompt = (
             "You are the Writer agent. Your goal is to draft a comprehensive, detailed, publication-ready research report.\n"
             f"Research Query: {query}\n"
             f"Research Plan:\n{plan}\n\n"
             f"Factual Sources:\n{sources_text}"
+            f"{synthesis_context}"
             f"{feedback_context}\n\n"
             "Draft the report in Markdown. Include:\n"
             "- A professional title\n"
