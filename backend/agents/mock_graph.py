@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import AsyncGenerator, Dict, Any
 
-async def run_mock_research(query: str) -> AsyncGenerator[str, None]:
+async def run_mock_research(query: str, queue: asyncio.Queue = None) -> AsyncGenerator[str, None]:
     """
     Simulates the multi-agent LangGraph workflow step-by-step, yielding
     state updates in JSON string format. It features loops:
@@ -18,7 +18,8 @@ async def run_mock_research(query: str) -> AsyncGenerator[str, None]:
         "critic_feedback": None,
         "final_report": None,
         "logs": [],
-        "active_agent": "Coordinator"
+        "active_agent": "Coordinator",
+        "awaiting_review": False
     }
 
     def add_log(agent: str, status: str, message: str):
@@ -169,24 +170,50 @@ async def run_mock_research(query: str) -> AsyncGenerator[str, None]:
     yield json.dumps(state)
     await asyncio.sleep(2.0)
 
-    # --- 7. CRITIC REVIEW (ITERATION 1 - REVISION NEEDED) ---
+    # --- 7. CRITIC REVIEW (ITERATION 1 - AWAIT USER REVIEW) ---
     add_log("Critic", "reviewing", "Analyzing report readability, structure, and depth...")
     yield json.dumps(state)
     await asyncio.sleep(2.5)
 
-    critic_feedback_1 = (
-        "REVISION NEEDED: The draft looks technically accurate, but lacks visual readability. "
-        "Please format the Index Build Time and Recall vs Latency metrics into a clear comparative markdown table. "
-        "Also, add a brief 'Recommendation' section at the end based on workloads."
-    )
-    state["critic_feedback"] = critic_feedback_1
-    add_log("Critic", "completed", "Revisions requested. Routing back to Writer to add comparative tables.")
-    state["active_agent"] = "Writer"
-    yield json.dumps(state)
-    await asyncio.sleep(2.0)
+    if queue:
+        # Pause execution and await human review
+        state["active_agent"] = "Critic"
+        state["awaiting_review"] = True
+        add_log("Critic", "completed", "Critic audit completed. Awaiting Human Editor review...")
+        yield json.dumps(state)
+        
+        user_msg_str = await queue.get()
+        user_msg = json.loads(user_msg_str) if isinstance(user_msg_str, str) else user_msg_str
+        feedback = user_msg.get("feedback", "")
+        
+        state["awaiting_review"] = False
+        
+        if feedback.lower() == "approve":
+            add_log("Critic", "completed", "User approved the report! Publishing final output.")
+            state["final_report"] = draft_2
+            state["active_agent"] = "Finalize"
+            yield json.dumps(state)
+            await asyncio.sleep(1.0)
+            return
+        else:
+            # Revision loop!
+            add_log("Critic", "completed", f"User requested revisions: '{feedback}'. Routing back to Writer.")
+            state["critic_feedback"] = feedback
+            state["active_agent"] = "Writer"
+            yield json.dumps(state)
+            await asyncio.sleep(2.0)
+    else:
+        # Fallback autonomous mock routing
+        critic_feedback_1 = "REVISION NEEDED: Please add comparative table and Recommendations."
+        state["critic_feedback"] = critic_feedback_1
+        add_log("Critic", "completed", "Revisions requested. Routing back to Writer to add comparative tables.")
+        state["active_agent"] = "Writer"
+        yield json.dumps(state)
+        await asyncio.sleep(2.0)
+        feedback = "Please add comparative table."
 
     # --- 8. WRITER RE-DRAFTS (ITERATION 3 - ADD TABLES & RECOMMENDATIONS) ---
-    add_log("Writer", "drafting", "Constructing data comparison matrices and finalizing recommendations...")
+    add_log("Writer", "drafting", "Constructing data comparison matrices and incorporating editor revisions...")
     yield json.dumps(state)
     await asyncio.sleep(3.0)
 
@@ -210,7 +237,9 @@ async def run_mock_research(query: str) -> AsyncGenerator[str, None]:
         "| **Memory Footprint** | 1.5x Index Size | 1.2x Index Size |\n\n"
         "## Recommendations\n"
         "1. **Use PGVector if**: You already run PostgreSQL, have less than 5M vectors, and need relational integration.\n"
-        "2. **Use Milvus if**: You require high QPS under concurrent load, need >=99% recall, and manage 10M+ vectors."
+        "2. **Use Milvus if**: You require high QPS under concurrent load, need >=99% recall, and manage 10M+ vectors.\n\n"
+        f"--- \n"
+        f"*Note: Draft updated to address editor request: '{feedback}'*"
     )
     state["draft_report"] = draft_3
     state["critic_feedback"] = None # Cleared
@@ -219,10 +248,19 @@ async def run_mock_research(query: str) -> AsyncGenerator[str, None]:
     yield json.dumps(state)
     await asyncio.sleep(2.0)
 
-    # --- 9. CRITIC REVIEW (ITERATION 2 - APPROVED) ---
+    # --- 9. CRITIC REVIEW (ITERATION 2 - FINAL APPROVAL) ---
     add_log("Critic", "reviewing", "Re-reviewing markdown tables and final structures...")
     yield json.dumps(state)
     await asyncio.sleep(2.0)
+
+    if queue:
+        state["active_agent"] = "Critic"
+        state["awaiting_review"] = True
+        add_log("Critic", "completed", "Revised draft ready. Awaiting final human approval...")
+        yield json.dumps(state)
+        
+        user_msg_str = await queue.get()
+        state["awaiting_review"] = False
 
     add_log("Critic", "completed", "Report formatting and technical depth approved. Publishing final research report.")
     state["final_report"] = draft_3

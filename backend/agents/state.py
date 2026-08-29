@@ -10,3 +10,5 @@ class AgentState(TypedDict):
     final_report: Optional[str]
     logs: List[Dict[str, Any]]
     active_agent: Optional[str]
+    awaiting_review: Optional[bool]
+

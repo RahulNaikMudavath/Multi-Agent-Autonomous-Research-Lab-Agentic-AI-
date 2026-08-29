@@ -23,44 +23,25 @@ app.add_middleware(
 def read_root():
     return {"status": "online", "message": "Multi-Agent Research Lab API is running."}
 
+import asyncio
+
 @app.websocket("/ws/research")
 async def websocket_research(websocket: WebSocket):
     await websocket.accept()
     logger.info("WebSocket connection established.")
     
-    try:
-        while True:
-            # Receive research trigger message
-            data_str = await websocket.receive_text()
-            data = json.loads(data_str)
-            
-            query = data.get("query", "")
-            mode = data.get("mode", "simulation")  # 'simulation' or 'real'
-            provider = data.get("provider", "gemini")  # 'gemini' or 'openai'
-            api_key = data.get("api_key", "")
-            tavily_key = data.get("tavily_key", "")
-            
-            logger.info(f"Triggering research. Query: '{query}', Mode: '{mode}', Provider: '{provider}'")
-            
-            if not query:
-                await websocket.send_text(json.dumps({
-                    "error": "Query cannot be empty."
-                }))
-                continue
-            
+    queue = asyncio.Queue()
+    research_task = None
+    
+    async def run_research_flow(query, mode, provider, api_key, tavily_key):
+        nonlocal websocket, queue
+        try:
             if mode == "simulation":
-                # Run simulated research steps
-                async for state_str in run_mock_research(query):
+                # Run mock research
+                async for state_str in run_mock_research(query, queue):
                     await websocket.send_text(state_str)
             else:
                 # Real execution using LangGraph
-                if not api_key:
-                    await websocket.send_text(json.dumps({
-                        "error": "API Key is required for Real Mode execution."
-                    }))
-                    continue
-                
-                # Setup initial state
                 state = {
                     "query": query,
                     "research_plan": None,
@@ -70,10 +51,10 @@ async def websocket_research(websocket: WebSocket):
                     "critic_feedback": None,
                     "final_report": None,
                     "logs": [],
-                    "active_agent": "Coordinator"
+                    "active_agent": "Coordinator",
+                    "awaiting_review": False
                 }
                 
-                # Initialize task log
                 state["logs"].append({
                     "agent": "System",
                     "status": "planning",
@@ -85,54 +66,109 @@ async def websocket_research(websocket: WebSocket):
                     "configurable": {
                         "provider": provider,
                         "api_key": api_key,
-                        "tavily_key": tavily_key
+                        "tavily_key": tavily_key,
+                        "websocket": websocket,
+                        "queue": queue
                     }
                 }
                 
-                try:
-                    # Run the LangGraph workflow streaming state updates
-                    async for output in graph.astream(state, config=config):
-                        # Merge state updates from node execution
-                        for node_name, updates in output.items():
-                            for key, val in updates.items():
-                                # Merge logs list instead of overriding
-                                if key == "logs":
-                                    # Take items not already in state["logs"]
-                                    current_len = len(state["logs"])
-                                    for item in val[current_len:]:
-                                        state["logs"].append(item)
-                                elif val is not None:
-                                    state[key] = val
-                        
-                        await websocket.send_text(json.dumps(state))
-                        
-                    # Final notification
-                    state["active_agent"] = "Finalize"
-                    state["logs"].append({
-                        "agent": "System",
-                        "status": "completed",
-                        "message": "Research task finished successfully."
-                    })
-                    await websocket.send_text(json.dumps(state))
+                async for output in graph.astream(state, config=config):
+                    for node_name, updates in output.items():
+                        for key, val in updates.items():
+                            if key == "logs":
+                                current_len = len(state["logs"])
+                                for item in val[current_len:]:
+                                    state["logs"].append(item)
+                            elif val is not None:
+                                state[key] = val
                     
-                except Exception as ex:
-                    logger.error(f"LangGraph execution error: {str(ex)}")
-                    state["logs"].append({
+                    await websocket.send_text(json.dumps(state))
+                
+                # Final notification
+                state["active_agent"] = "Finalize"
+                state["awaiting_review"] = False
+                state["logs"].append({
+                    "agent": "System",
+                    "status": "completed",
+                    "message": "Research task finished successfully."
+                })
+                await websocket.send_text(json.dumps(state))
+        except asyncio.CancelledError:
+            logger.info("Research task cancelled.")
+            # Send abort state
+            try:
+                await websocket.send_text(json.dumps({
+                    "active_agent": "Error",
+                    "logs": [{
+                        "agent": "System",
+                        "status": "error",
+                        "message": "Research process aborted by user."
+                    }]
+                }))
+            except:
+                pass
+        except Exception as ex:
+            logger.error(f"Execution error: {str(ex)}")
+            try:
+                await websocket.send_text(json.dumps({
+                    "active_agent": "Error",
+                    "logs": [{
                         "agent": "System",
                         "status": "error",
                         "message": f"Execution failed: {str(ex)}"
-                    })
-                    state["active_agent"] = "Error"
-                    await websocket.send_text(json.dumps(state))
+                    }]
+                }))
+            except:
+                pass
+
+    try:
+        while True:
+            data_str = await websocket.receive_text()
+            data = json.loads(data_str)
+            
+            msg_type = data.get("type", "start")
+            
+            if msg_type == "start":
+                # Cancel existing task if running
+                if research_task and not research_task.done():
+                    research_task.cancel()
+                    
+                # Reset queue
+                queue = asyncio.Queue()
+                
+                query = data.get("query", "")
+                mode = data.get("mode", "simulation")
+                provider = data.get("provider", "gemini")
+                api_key = data.get("api_key", "")
+                tavily_key = data.get("tavily_key", "")
+                
+                if not query:
+                    await websocket.send_text(json.dumps({"error": "Query cannot be empty."}))
+                    continue
+                    
+                if mode == "real" and not api_key:
+                    await websocket.send_text(json.dumps({"error": "API Key is required for Real Mode."}))
+                    continue
+                
+                research_task = asyncio.create_task(
+                    run_research_flow(query, mode, provider, api_key, tavily_key)
+                )
+                
+            elif msg_type == "review":
+                # Push user review feedback to the queue
+                await queue.put(data)
+                
+            elif msg_type == "abort":
+                if research_task and not research_task.done():
+                    research_task.cancel()
                     
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected.")
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
-        try:
-            await websocket.close()
-        except:
-            pass
+    finally:
+        if research_task and not research_task.done():
+            research_task.cancel()
 
 if __name__ == "__main__":
     import uvicorn

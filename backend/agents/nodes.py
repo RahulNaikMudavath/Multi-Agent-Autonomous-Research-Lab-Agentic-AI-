@@ -339,33 +339,87 @@ async def critic_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         critic_output = response.content
         
-        if critic_output.strip().startswith("REVISION NEEDED"):
-            status_msg = "Critic requested revisions. Routing back to Writer."
-            next_agent = "Writer"
-            feedback = critic_output
-            final = None
-        else:
-            status_msg = "Critic approved the research report! Publishing final output."
-            next_agent = "Finalize"
-            feedback = None
-            final = draft
-            
-        logs.append({
-            "agent": "Critic",
-            "status": "completed",
-            "message": status_msg
-        })
+        # Check if queue and websocket are present in configurable
+        configurable = config.get("configurable", {})
+        websocket = configurable.get("websocket")
+        queue = configurable.get("queue")
         
-        return {
-            "critic_feedback": feedback,
-            "final_report": final,
-            "logs": logs,
-            "active_agent": next_agent
-        }
+        if websocket and queue:
+            # Let the user know the critic finished its audit, and we are pausing for human approval/edits
+            logs.append({
+                "agent": "Critic",
+                "status": "completed",
+                "message": f"Critic audit completed. Awaiting Human Editor review..."
+            })
+            
+            # Send current state with awaiting_review flag set to True
+            pause_state = {
+                **state,
+                "logs": logs,
+                "active_agent": "Critic",
+                "awaiting_review": True
+            }
+            await websocket.send_text(json.dumps(pause_state))
+            
+            # Await user feedback from the session queue
+            user_msg_str = await queue.get()
+            user_msg = json.loads(user_msg_str) if isinstance(user_msg_str, str) else user_msg_str
+            feedback = user_msg.get("feedback", "")
+            
+            if feedback.lower() == "approve":
+                status_msg = "User approved the report! Publishing final output."
+                next_agent = "Finalize"
+                feedback_val = None
+                final = draft
+            else:
+                status_msg = f"User requested revisions: '{feedback}'. Routing back to Writer."
+                next_agent = "Writer"
+                feedback_val = f"USER REQUESTED REVISIONS:\n{feedback}\n\nCRITIC NOTES:\n{critic_output}"
+                final = None
+                
+            logs.append({
+                "agent": "Critic",
+                "status": "completed",
+                "message": status_msg
+            })
+            
+            return {
+                "critic_feedback": feedback_val,
+                "final_report": final,
+                "logs": logs,
+                "active_agent": next_agent,
+                "awaiting_review": False
+            }
+        else:
+            # Fallback to LLM autonomous review
+            if critic_output.strip().startswith("REVISION NEEDED"):
+                status_msg = "Critic requested revisions. Routing back to Writer."
+                next_agent = "Writer"
+                feedback = critic_output
+                final = None
+            else:
+                status_msg = "Critic approved the research report! Publishing final output."
+                next_agent = "Finalize"
+                feedback = None
+                final = draft
+                
+            logs.append({
+                "agent": "Critic",
+                "status": "completed",
+                "message": status_msg
+            })
+            
+            return {
+                "critic_feedback": feedback,
+                "final_report": final,
+                "logs": logs,
+                "active_agent": next_agent,
+                "awaiting_review": False
+            }
     except Exception as e:
         logs.append({
             "agent": "Critic",
             "status": "error",
             "message": f"Critic node failed: {str(e)}"
         })
-        return {"logs": logs, "active_agent": "Critic"}
+        return {"logs": logs, "active_agent": "Critic", "awaiting_review": False}

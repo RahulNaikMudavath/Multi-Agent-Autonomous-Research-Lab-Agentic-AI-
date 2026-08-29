@@ -20,6 +20,7 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [draftReport, setDraftReport] = useState(null);
   const [finalReport, setFinalReport] = useState(null);
+  const [awaitingReview, setAwaitingReview] = useState(false);
   
   const wsRef = useRef(null);
 
@@ -33,6 +34,7 @@ export default function App() {
     ]);
     setDraftReport(null);
     setFinalReport(null);
+    setAwaitingReview(false);
 
     // Initialize WebSocket connection
     const ws = new WebSocket('ws://localhost:8000/ws/research');
@@ -41,6 +43,7 @@ export default function App() {
     ws.onopen = () => {
       // Send execution configuration payload
       const payload = {
+        type: 'start',
         query,
         mode,
         provider,
@@ -58,6 +61,7 @@ export default function App() {
           setLogs(prev => [...prev, { agent: 'System', status: 'error', message: `Server error: ${data.error}` }]);
           setIsRunning(false);
           setActiveAgent('Error');
+          setAwaitingReview(false);
           return;
         }
 
@@ -66,10 +70,12 @@ export default function App() {
         if (data.logs) setLogs(data.logs);
         if (data.draft_report) setDraftReport(data.draft_report);
         if (data.final_report) setFinalReport(data.final_report);
+        if (data.awaiting_review !== undefined) setAwaitingReview(data.awaiting_review);
 
         // Terminate UI execution if workflow is finalized or errored
         if (data.active_agent === 'Finalize' || data.active_agent === 'Error') {
           setIsRunning(false);
+          setAwaitingReview(false);
           ws.close();
         }
       } catch (err) {
@@ -82,21 +88,43 @@ export default function App() {
       setLogs(prev => [...prev, { agent: 'System', status: 'error', message: 'WebSocket connection encountered an error.' }]);
       setIsRunning(false);
       setActiveAgent('Error');
+      setAwaitingReview(false);
     };
 
     ws.onclose = () => {
       setIsRunning(false);
+      setAwaitingReview(false);
       console.log('WebSocket connection closed.');
     };
   };
 
   const stopResearch = () => {
-    if (wsRef.current) {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'abort' }));
       wsRef.current.close();
     }
     setIsRunning(false);
+    setAwaitingReview(false);
     setActiveAgent(null);
     setLogs(prev => [...prev, { agent: 'System', status: 'error', message: 'Research process aborted by user.' }]);
+  };
+
+  const sendReview = (feedbackText) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'review',
+        feedback: feedbackText
+      }));
+      setAwaitingReview(false);
+      // Locally echo the action in logs
+      setLogs(prev => [...prev, {
+        agent: 'System',
+        status: 'planning',
+        message: feedbackText.toLowerCase() === 'approve'
+          ? 'Human Editor: Approved report draft.'
+          : `Human Editor requested revisions: "${feedbackText}"`
+      }]);
+    }
   };
 
   // Cleanup on unmount
@@ -109,6 +137,7 @@ export default function App() {
   }, []);
 
   const getStatusText = () => {
+    if (awaitingReview) return 'Awaiting Human Review';
     if (!isRunning) return 'Ready';
     if (activeAgent === 'Finalize') return 'Completed';
     if (activeAgent === 'Error') return 'Failed';
@@ -116,6 +145,7 @@ export default function App() {
   };
 
   const getStatusClass = () => {
+    if (awaitingReview) return 'active'; // or custom pulsing
     if (!isRunning) return 'idle';
     if (activeAgent === 'Finalize') return 'completed';
     if (activeAgent === 'Error') return 'error';
@@ -149,6 +179,8 @@ export default function App() {
         tavilyKey={tavilyKey}
         setTavilyKey={setTavilyKey}
         isRunning={isRunning}
+        awaitingReview={awaitingReview}
+        onSendReview={sendReview}
         onStart={startResearch}
         onStop={stopResearch}
       />
