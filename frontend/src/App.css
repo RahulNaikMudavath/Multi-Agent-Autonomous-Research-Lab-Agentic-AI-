@@ -577,3 +577,258 @@ body {
     stroke-dashoffset: -20;
   }
 }
+
+/* Agent Loading Animation & Dashboard Progress Styles */
+.agent-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  gap: 24px;
+}
+
+/* Radar & Orbit Visualizer */
+.radar-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radar-circle {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+}
+
+.circle-1 {
+  width: 120px;
+  height: 120px;
+  border-top-color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+  animation: spin-clockwise 4s linear infinite;
+  filter: drop-shadow(0 0 4px var(--accent-cyan));
+  opacity: 0.6;
+}
+
+.circle-2 {
+  width: 90px;
+  height: 90px;
+  border-left-color: var(--accent-purple);
+  border-right-color: var(--accent-purple);
+  animation: spin-counter-clockwise 3s linear infinite;
+  filter: drop-shadow(0 0 6px var(--accent-purple));
+  opacity: 0.7;
+}
+
+.circle-3 {
+  width: 60px;
+  height: 60px;
+  border-top-color: var(--accent-green);
+  border-left-color: var(--accent-green);
+  animation: spin-clockwise 2s linear infinite;
+  filter: drop-shadow(0 0 3px var(--accent-green));
+  opacity: 0.8;
+}
+
+.radar-core {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, var(--accent-cyan) 0%, rgba(0, 240, 255, 0.1) 70%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px var(--accent-cyan);
+}
+
+.spinning-core {
+  color: #08090d;
+  animation: spin-clockwise 2.5s linear infinite;
+}
+
+.radar-pulse {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border: 2px solid var(--accent-cyan);
+  border-radius: 50%;
+  opacity: 0;
+  animation: radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.loading-status-title {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.loading-status-title h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.active-agent-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.active-agent-badge {
+  background: rgba(189, 92, 255, 0.15);
+  border: 1px solid rgba(189, 92, 255, 0.3);
+  color: var(--accent-purple);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 8px rgba(189, 92, 255, 0.1);
+}
+
+/* Agent Steps Timeline List */
+.agent-steps {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 360px;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.agent-step {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.01);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.step-bullet {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1.5px solid var(--border-color);
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.step-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+.step-desc {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  transition: color 0.3s;
+}
+
+/* Step State Modifiers */
+.agent-step.pending {
+  opacity: 0.5;
+}
+
+.agent-step.active {
+  background: rgba(189, 92, 255, 0.04);
+  border-color: rgba(189, 92, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(189, 92, 255, 0.05);
+}
+
+.agent-step.active .step-bullet {
+  border-color: var(--accent-purple);
+  color: var(--accent-purple);
+  background: rgba(189, 92, 255, 0.1);
+  box-shadow: 0 0 10px rgba(189, 92, 255, 0.3);
+  animation: bullet-glow-pulse 1.5s infinite ease-in-out;
+}
+
+.agent-step.active .step-name {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.agent-step.active .step-desc {
+  color: var(--text-secondary);
+}
+
+.agent-step.completed {
+  background: rgba(16, 185, 129, 0.02);
+  border-color: rgba(16, 185, 129, 0.08);
+}
+
+.agent-step.completed .step-bullet {
+  border-color: var(--accent-green);
+  color: #08090d;
+  background: var(--accent-green);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+}
+
+.agent-step.completed .step-name {
+  color: var(--accent-green);
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+
+.agent-step.completed .step-desc {
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.agent-step.error {
+  background: rgba(239, 68, 68, 0.04);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.agent-step.error .step-bullet {
+  border-color: var(--accent-red);
+  color: white;
+  background: var(--accent-red);
+}
+
+/* Loader Spin / Orbit Keyframes */
+@keyframes spin-clockwise {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spin-counter-clockwise {
+  0% { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes radar-ping {
+  0% { transform: scale(0.5); opacity: 0.8; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+@keyframes bullet-glow-pulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(189, 92, 255, 0.2); }
+  50% { box-shadow: 0 0 12px rgba(189, 92, 255, 0.6); }
+}
+
