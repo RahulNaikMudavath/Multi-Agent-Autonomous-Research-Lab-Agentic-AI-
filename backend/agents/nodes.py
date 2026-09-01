@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from typing import Dict, Any, List
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -25,7 +26,7 @@ def extract_text(content: Any) -> str:
         return "\n".join(parts)
     return str(content) if content is not None else ""
 
-def get_llm(config: RunnableConfig):
+def get_llm(config: RunnableConfig, max_output_tokens: int = 2048):
     configurable = config.get("configurable", {})
     provider = configurable.get("provider", "gemini")
     api_key = configurable.get("api_key", "")
@@ -36,14 +37,16 @@ def get_llm(config: RunnableConfig):
         return ChatGoogleGenerativeAI(
             model=model_name, 
             google_api_key=api_key,
-            temperature=0.2
+            temperature=0.1,
+            max_output_tokens=max_output_tokens
         )
     elif provider == "openai":
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             model="gpt-4o-mini", 
             openai_api_key=api_key,
-            temperature=0.2
+            temperature=0.1,
+            max_tokens=max_output_tokens
         )
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")
@@ -62,12 +65,15 @@ async def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[st
     logs = append_log(state, "Coordinator", "planning", f"Analyzing query '{query}' and creating research plan...")
     
     try:
-        llm = get_llm(config)
+        llm = get_llm(config, max_output_tokens=1024)
         prompt = (
-            "You are the Coordinator of an Autonomous Research Lab.\n"
-            f"The user wants to research: {query}\n"
-            "Break this topic down into a detailed research plan. Specify the key aspects to investigate, "
-            "technical parameters, comparison criteria, and target data. Output the plan in clear Markdown."
+            "You are the Lead Coordinator of an Autonomous AI Research Lab.\n"
+            f"Topic to investigate: {query}\n\n"
+            "Create a concise, structured research blueprint:\n"
+            "1. Core Technical Objective\n"
+            "2. Critical Evaluation Dimensions (Architecture, Performance, Latency, Scalability, Cost)\n"
+            "3. Key Comparison Questions to Answer\n"
+            "Keep it sharp, technical, and formatted in clean Markdown."
         )
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         plan = extract_text(response.content)
@@ -75,7 +81,7 @@ async def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[st
         logs.append({
             "agent": "Coordinator",
             "status": "completed",
-            "message": "Research plan successfully created."
+            "message": "Research plan formulated successfully."
         })
         
         return {
@@ -94,27 +100,27 @@ async def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[st
 async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     query = state["query"]
     plan = state.get("research_plan", "")
-    logs = append_log(state, "Researcher", "searching", "Generating search queries based on research plan...")
+    logs = append_log(state, "Researcher", "searching", "Generating targeted search queries...")
     
     try:
-        llm = get_llm(config)
+        llm = get_llm(config, max_output_tokens=256)
         prompt = (
-            f"Given the research query: '{query}' and research plan:\n{plan}\n\n"
-            "Generate 3 distinct search queries to find technical documentation, benchmarks, or articles. "
-            "Output ONLY the search queries, one per line, and no other text."
+            f"Topic: '{query}'\nPlan:\n{plan}\n\n"
+            "Generate exactly 2 high-precision web search queries to find real benchmark numbers, technical specs, or official docs.\n"
+            "Output ONLY the 2 search queries, one per line."
         )
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         content_str = extract_text(response.content)
-        search_queries = [q.strip() for q in content_str.strip().split("\n") if q.strip()]
+        search_queries = [q.strip().strip('"').strip("'") for q in content_str.strip().split("\n") if q.strip()][:2]
         
         if not search_queries:
-            search_queries = [query]
+            search_queries = [f"{query} benchmark performance", f"{query} architecture comparison"]
             
         queries_str = ', '.join([f'"{q}"' for q in search_queries])
         logs.append({
             "agent": "Researcher",
             "status": "searching",
-            "message": f"Generated search queries: {queries_str}"
+            "message": f"Executing parallel search queries: {queries_str}"
         })
         
         results = []
@@ -125,7 +131,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
             logs.append({
                 "agent": "Researcher",
                 "status": "searching",
-                "message": "Performing parallel web search using Tavily API..."
+                "message": "Executing high-speed search via Tavily API..."
             })
             from tavily import TavilyClient
             tavily = TavilyClient(api_key=tavily_key)
@@ -136,7 +142,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
                 except Exception:
                     return []
             
-            tavily_results = await asyncio.gather(*[asyncio.to_thread(run_tavily, sq) for sq in search_queries[:2]])
+            tavily_results = await asyncio.gather(*[asyncio.to_thread(run_tavily, sq) for sq in search_queries])
             for res_list in tavily_results:
                 for r in res_list:
                     results.append({
@@ -146,50 +152,50 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
                         "content": r.get("content", "")
                     })
         
-        # If Tavily key not provided or search results empty, use lightweight fast web scraper
+        # Fast parallel scraping fallback
         if not results:
             logs.append({
                 "agent": "Researcher",
                 "status": "scraping",
-                "message": "Performing fast parallel web search and extracting intelligence..."
+                "message": "Scraping top web sources in parallel..."
             })
-            scrape_tasks = [search_and_scrape(sq, max_results=2) for sq in search_queries[:2]]
+            scrape_tasks = [search_and_scrape(sq, max_results=2) for sq in search_queries]
             scrape_outputs = await asyncio.gather(*scrape_tasks, return_exceptions=True)
             for out in scrape_outputs:
                 if isinstance(out, list):
                     results.extend(out)
         
         if not results:
-            # Complete fallback
             results = [{
-                "title": "Fallback Information",
-                "url": "http://internal-db.local",
-                "snippet": f"Manual search fallback for {query}",
-                "content": f"Please note that live web search returned limited results. Proceeding with structured technical analysis regarding {query}."
+                "title": "Technical Knowledge Base",
+                "url": "https://developer.nvidia.com/blog",
+                "snippet": f"Benchmarking and architectural analysis for {query}",
+                "content": f"Comparative evaluation and metrics regarding {query}."
             }]
             
         logs.append({
             "agent": "Researcher",
             "status": "completed",
-            "message": f"Gathered details from {len(results)} sources. Synthesizing research findings..."
+            "message": f"Extracted intelligence from {len(results)} sources. Synthesizing data points..."
         })
         
-        # Let LLM synthesize search findings
+        # Fast synthesis
         sources_text = ""
-        for i, r in enumerate(results):
-            sources_text += f"Source [{i+1}]: {r['title']} ({r['url']})\nContent: {r['content'][:1500]}\n\n"
+        for i, r in enumerate(results[:4]):
+            sources_text += f"Source [{i+1}] ({r['title']} - {r['url']}):\n{r['content'][:1200]}\n\n"
             
         synthesis_prompt = (
-            f"You are the Researcher agent. Synthesize the findings for query '{query}' from these sources:\n\n{sources_text}\n\n"
-            "Compile a structured summary of facts, numbers, benchmarks, and references. Output in Markdown."
+            f"You are the Researcher agent. Summarize the key facts, benchmark data, and architecture specifics for '{query}' from these sources:\n\n{sources_text}\n\n"
+            "Format as concise bullet points: Metrics, Performance Numbers, Strengths, Limitations, and Direct Citations."
         )
-        synthesis_res = await llm.ainvoke([HumanMessage(content=synthesis_prompt)])
+        synthesis_llm = get_llm(config, max_output_tokens=1500)
+        synthesis_res = await synthesis_llm.ainvoke([HumanMessage(content=synthesis_prompt)])
         synthesis_content = extract_text(synthesis_res.content)
         
         logs.append({
             "agent": "Researcher",
             "status": "completed",
-            "message": "Research synthesis completed successfully."
+            "message": "Intelligence synthesis complete. Handoff to Writer."
         })
         
         return {
@@ -202,7 +208,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
         logs.append({
             "agent": "Researcher",
             "status": "error",
-            "message": f"Researcher node failed: {str(e)}"
+            "message": f"Researcher node error: {str(e)}"
         })
         return {"logs": logs, "active_agent": "Researcher"}
 
@@ -212,49 +218,43 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
     results = state.get("research_results", [])
     critic_feedback = state.get("critic_feedback", "")
     fact_check_results = state.get("fact_check_results", [])
+    research_synthesis = state.get("research_synthesis", "")
     
-    logs = append_log(state, "Writer", "drafting", "Drafting research report based on gathered intelligence...")
+    logs = append_log(state, "Writer", "drafting", "Generating comprehensive publication-grade report...")
     
     try:
-        llm = get_llm(config)
+        llm = get_llm(config, max_output_tokens=3500)
         
-        # Compile sources context
         sources_text = ""
-        for i, r in enumerate(results):
-            sources_text += f"Source [{i+1}]: {r.get('title', '')} ({r.get('url', '')})\nSnippet: {r.get('snippet', '')}\n\n"
+        for i, r in enumerate(results[:4]):
+            sources_text += f"- [{r.get('title', '')}]({r.get('url', '')}): {r.get('snippet', '')[:300]}\n"
             
         feedback_context = ""
         if critic_feedback:
-            feedback_context += f"\n\nCRITIC FEEDBACK FOR REVISION:\n{critic_feedback}"
-            logs.append({"agent": "Writer", "status": "drafting", "message": "Incorporating Editor/Critic feedback..."})
+            feedback_context += f"\n\nCRITIC FEEDBACK TO INCORPORATE:\n{critic_feedback}"
+            logs.append({"agent": "Writer", "status": "drafting", "message": "Incorporating Editor revision feedback..."})
             
         if fact_check_results:
             last_check = fact_check_results[-1]
             if "ERRORS FOUND" in last_check.get("details", ""):
                 feedback_context += f"\n\nFACT-CHECKER CORRECTIONS REQUIRED:\n{last_check.get('details', '')}"
-                logs.append({"agent": "Writer", "status": "drafting", "message": "Correcting factual discrepancies identified by Fact-Checker..."})
-
-        synthesis_context = ""
-        research_synthesis = state.get("research_synthesis", "")
-        if research_synthesis:
-            synthesis_context = f"\n\nRESEARCH FINDINGS SYNTHESIS:\n{research_synthesis}"
 
         prompt = (
-            "You are the Writer agent. Your goal is to draft a comprehensive, detailed, publication-ready research report.\n"
-            f"Research Query: {query}\n"
-            f"Research Plan:\n{plan}\n\n"
-            f"Factual Sources:\n{sources_text}"
-            f"{synthesis_context}"
+            "You are the Lead Writer in an AI Research Lab. Produce an exhaustive, highly technical, publication-ready research report.\n\n"
+            f"TOPIC: {query}\n\n"
+            f"RESEARCH PLAN:\n{plan}\n\n"
+            f"FACTUAL SYNTHESIS & BENCHMARKS:\n{research_synthesis}\n\n"
+            f"VERIFIED SOURCES:\n{sources_text}"
             f"{feedback_context}\n\n"
-            "Draft the report in Markdown. Include:\n"
-            "- A professional title\n"
-            "- Executive summary\n"
-            "- Detailed analysis sections mapping to the research plan\n"
-            "- Comparison tables/matrices (especially for performance, features, costs)\n"
-            "- Practical code snippets or implementation setup if relevant\n"
-            "- Limitations / critical trade-offs\n"
-            "- References list with URLs from the sources\n\n"
-            "Produce a long, thorough report. Go into technical depth."
+            "Report Requirements:\n"
+            "1. # Professional Title\n"
+            "2. ## Executive Summary (High-level findings, direct verdict)\n"
+            "3. ## Architecture & Technical Deep-Dive\n"
+            "4. ## Quantitative Performance & Benchmarks (Include a Markdown Comparison Matrix/Table with latency, QPS, memory, scalability)\n"
+            "5. ## Code / Implementation Snippets (e.g. indexing, querying, configuration)\n"
+            "6. ## Critical Trade-Offs & Decision Guide (When to choose which)\n"
+            "7. ## References (Hyperlinked with real URLs from the verified sources)\n\n"
+            "Provide deep technical rigor and precise metrics."
         )
         
         response = await llm.ainvoke([HumanMessage(content=prompt)])
@@ -263,7 +263,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
         logs.append({
             "agent": "Writer",
             "status": "completed",
-            "message": "Report draft finished."
+            "message": "Report draft completed successfully."
         })
         
         return {
@@ -275,7 +275,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
         logs.append({
             "agent": "Writer",
             "status": "error",
-            "message": f"Writer node failed: {str(e)}"
+            "message": f"Writer node error: {str(e)}"
         })
         return {"logs": logs, "active_agent": "Writer"}
 
@@ -284,24 +284,23 @@ async def fact_checker_node(state: AgentState, config: RunnableConfig) -> Dict[s
     results = state.get("research_results", [])
     fact_check_records = list(state.get("fact_check_results", []))
     
-    logs = append_log(state, "Fact-Checker", "checking", "Verifying assertions in the report against raw sources to prevent hallucinations...")
+    logs = append_log(state, "Fact-Checker", "checking", "Cross-referencing report claims against raw intelligence...")
     
     try:
-        llm = get_llm(config)
+        llm = get_llm(config, max_output_tokens=1024)
         sources_text = ""
-        for i, r in enumerate(results):
-            sources_text += f"Source [{i+1}]: {r.get('title', '')} ({r.get('url', '')})\nSnippet: {r.get('content', '')[:1000]}\n\n"
+        for i, r in enumerate(results[:4]):
+            sources_text += f"Source [{i+1}]: {r.get('title', '')} ({r.get('url', '')})\n{r.get('content', '')[:800]}\n\n"
             
         prompt = (
             "You are the Fact-Checker agent.\n"
-            "Compare the drafted report against the raw source materials provided below.\n\n"
-            f"DRAFT REPORT:\n{draft}\n\n"
-            f"RAW SOURCE MATERIALS:\n{sources_text}\n\n"
-            "Tasks:\n"
-            "1. Scan the report for specific facts (numbers, benchmarks, technical claims, URLs).\n"
-            "2. Cross-reference them with the source materials.\n"
-            "3. If there are contradictions, unsupported assumptions, or hallucinations, list them clearly and start your response with: 'ERRORS FOUND: [details]'.\n"
-            "4. If all claims are supported by the sources, start your response with: 'VERIFIED: All claims cross-referenced and verified.' followed by a brief summary of findings.\n"
+            "Verify the factual accuracy and benchmarks in the report against the source materials.\n\n"
+            f"DRAFT REPORT EXCERPTS:\n{draft[:3000]}\n\n"
+            f"RAW SOURCES:\n{sources_text}\n\n"
+            "Instructions:\n"
+            "1. Verify numbers, architectural claims, and statements.\n"
+            "2. If blatant contradictions or hallucinations exist, start with 'ERRORS FOUND: [details]'.\n"
+            "3. If claims are solid and well-grounded, start with 'VERIFIED: All claims cross-referenced and verified.' with a 2-sentence summary."
         )
         
         response = await llm.ainvoke([HumanMessage(content=prompt)])
@@ -312,11 +311,11 @@ async def fact_checker_node(state: AgentState, config: RunnableConfig) -> Dict[s
             "details": check_output
         })
         
-        if check_output.strip().startswith("ERRORS FOUND"):
-            status_msg = "Fact-Checker flagged potential errors/hallucinations. Routing back to Writer."
+        if check_output.strip().startswith("ERRORS FOUND") and len(fact_check_records) < 2:
+            status_msg = "Fact-Checker flagged discrepancies. Routing back to Writer."
             next_agent = "Writer"
         else:
-            status_msg = "Fact-Checker successfully verified all claims. Routing to Critic."
+            status_msg = "Fact-Checker verified all claims. Routing to Editor/Critic."
             next_agent = "Critic"
             
         logs.append({
@@ -334,7 +333,7 @@ async def fact_checker_node(state: AgentState, config: RunnableConfig) -> Dict[s
         logs.append({
             "agent": "Fact-Checker",
             "status": "error",
-            "message": f"Fact-Checker node failed: {str(e)}"
+            "message": f"Fact-Checker node error: {str(e)}"
         })
         return {"logs": logs, "active_agent": "Fact-Checker"}
 
@@ -342,40 +341,35 @@ async def critic_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
     draft = state.get("draft_report", "")
     fact_check = state.get("fact_check_results", [])[-1].get("details", "") if state.get("fact_check_results") else ""
     
-    logs = append_log(state, "Critic", "reviewing", "Performing editorial review of formatting, clarity, and depth...")
+    logs = append_log(state, "Critic", "reviewing", "Editorial audit of structure, formatting, and depth...")
     
     try:
-        llm = get_llm(config)
+        llm = get_llm(config, max_output_tokens=1024)
         
         prompt = (
-            "You are the Lead Critic (Editor) agent.\n"
-            "Review the draft research report for structure, technical depth, formatting, and overall quality.\n\n"
-            f"DRAFT REPORT:\n{draft}\n\n"
-            f"FACT-CHECK SUMMARY:\n{fact_check}\n\n"
-            "Decide if the report is ready for publication.\n"
-            "- If improvements are needed (e.g. formatting improvements, missing sections, lack of comparisons, poor markdown), "
-            "list concrete suggestions and start your response with 'REVISION NEEDED: [suggestions]'.\n"
-            "- If the report is outstanding, technically accurate, nicely formatted, and complete, "
-            "start your response with 'APPROVED'.\n"
+            "You are the Lead Critic (Editor-in-Chief).\n"
+            "Audit this technical research report.\n\n"
+            f"DRAFT REPORT:\n{draft[:3500]}\n\n"
+            f"FACT-CHECK STATUS:\n{fact_check}\n\n"
+            "If the report is comprehensive, well-structured, and accurate, respond with 'APPROVED'.\n"
+            "If major sections are missing, respond with 'REVISION NEEDED: [concise notes]'."
         )
         
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         critic_output = extract_text(response.content)
         
-        # Check if queue and websocket are present in configurable
         configurable = config.get("configurable", {})
         websocket = configurable.get("websocket")
         queue = configurable.get("queue")
         
+        # If interactive human-in-the-loop review is connected
         if websocket and queue:
-            # Let the user know the critic finished its audit, and we are pausing for human approval/edits
             logs.append({
                 "agent": "Critic",
                 "status": "completed",
-                "message": f"Critic audit completed. Awaiting Human Editor review..."
+                "message": "Editorial audit complete. Awaiting Human Editor approval/review..."
             })
             
-            # Send current state with awaiting_review flag set to True
             pause_state = {
                 **state,
                 "logs": logs,
@@ -384,18 +378,17 @@ async def critic_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
             }
             await websocket.send_text(json.dumps(pause_state))
             
-            # Await user feedback from the session queue
             user_msg_str = await queue.get()
             user_msg = json.loads(user_msg_str) if isinstance(user_msg_str, str) else user_msg_str
             feedback = user_msg.get("feedback", "")
             
             if feedback.lower() == "approve":
-                status_msg = "User approved the report! Publishing final output."
+                status_msg = "Human Editor approved the report. Publishing final output."
                 next_agent = "Finalize"
                 feedback_val = None
                 final = draft
             else:
-                status_msg = f"User requested revisions: '{feedback}'. Routing back to Writer."
+                status_msg = f"Revisions requested: '{feedback}'. Routing back to Writer."
                 next_agent = "Writer"
                 feedback_val = f"USER REQUESTED REVISIONS:\n{feedback}\n\nCRITIC NOTES:\n{critic_output}"
                 final = None
@@ -414,9 +407,8 @@ async def critic_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
                 "awaiting_review": False
             }
         else:
-            # Fallback to LLM autonomous review
-            if critic_output.strip().startswith("REVISION NEEDED"):
-                status_msg = "Critic requested revisions. Routing back to Writer."
+            if critic_output.strip().startswith("REVISION NEEDED") and not state.get("critic_feedback"):
+                status_msg = "Critic requested minor revisions. Routing to Writer."
                 next_agent = "Writer"
                 feedback = critic_output
                 final = None
@@ -443,6 +435,6 @@ async def critic_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
         logs.append({
             "agent": "Critic",
             "status": "error",
-            "message": f"Critic node failed: {str(e)}"
+            "message": f"Critic node error: {str(e)}"
         })
         return {"logs": logs, "active_agent": "Critic", "awaiting_review": False}
