@@ -54,7 +54,7 @@ workflow.add_conditional_edges(
     route_critic,
     {
         "writer": "writer",
-        "end": END
+        END: END
     }
 )
 
