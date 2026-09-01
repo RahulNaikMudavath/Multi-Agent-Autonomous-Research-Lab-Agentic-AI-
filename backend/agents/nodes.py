@@ -125,45 +125,39 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
             logs.append({
                 "agent": "Researcher",
                 "status": "searching",
-                "message": "Performing web search using Tavily API..."
+                "message": "Performing parallel web search using Tavily API..."
             })
             from tavily import TavilyClient
             tavily = TavilyClient(api_key=tavily_key)
             
-            for s_query in search_queries[:2]:
+            def run_tavily(sq):
                 try:
-                    search_res = tavily.search(query=s_query, max_results=3, include_raw_content=False)
-                    for r in search_res.get("results", []):
-                        results.append({
-                            "title": r.get("title", ""),
-                            "url": r.get("url", ""),
-                            "snippet": r.get("content", ""),
-                            "content": r.get("content", "")
-                        })
-                except Exception as ex:
-                    logs.append({
-                        "agent": "Researcher",
-                        "status": "error",
-                        "message": f"Tavily search failed for '{s_query}': {str(ex)}"
+                    return tavily.search(query=sq, max_results=3, include_raw_content=False).get("results", [])
+                except Exception:
+                    return []
+            
+            tavily_results = await asyncio.gather(*[asyncio.to_thread(run_tavily, sq) for sq in search_queries[:2]])
+            for res_list in tavily_results:
+                for r in res_list:
+                    results.append({
+                        "title": r.get("title", ""),
+                        "url": r.get("url", ""),
+                        "snippet": r.get("content", ""),
+                        "content": r.get("content", "")
                     })
         
-        # If Tavily key not provided or search results empty, use lightweight web scraper
+        # If Tavily key not provided or search results empty, use lightweight fast web scraper
         if not results:
             logs.append({
                 "agent": "Researcher",
                 "status": "scraping",
-                "message": "Searching web and extracting content from top sources..."
+                "message": "Performing fast parallel web search and extracting intelligence..."
             })
-            for s_query in search_queries[:2]:
-                try:
-                    scrape_res = await search_and_scrape(s_query, max_results=2)
-                    results.extend(scrape_res)
-                except Exception as ex:
-                    logs.append({
-                        "agent": "Researcher",
-                        "status": "error",
-                        "message": f"Web scrape failed for '{s_query}': {str(ex)}"
-                    })
+            scrape_tasks = [search_and_scrape(sq, max_results=2) for sq in search_queries[:2]]
+            scrape_outputs = await asyncio.gather(*scrape_tasks, return_exceptions=True)
+            for out in scrape_outputs:
+                if isinstance(out, list):
+                    results.extend(out)
         
         if not results:
             # Complete fallback

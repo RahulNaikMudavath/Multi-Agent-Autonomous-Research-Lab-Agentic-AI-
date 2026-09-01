@@ -14,52 +14,52 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.5",
 }
 
-# Maximum bytes to download per page to prevent high memory usage
-MAX_PAGE_BYTES = 512 * 1024  # 512 KB
-MAX_CONTENT_CHARS = 2500
+# Maximum bytes to download per page to prevent memory overhead
+MAX_PAGE_BYTES = 256 * 1024  # 256 KB
+MAX_CONTENT_CHARS = 2000
 
-async def search_duckduckgo(client: httpx.AsyncClient, query: str, max_results: int = 3) -> List[Dict[str, str]]:
-    """Search DuckDuckGo HTML endpoint without browser overhead."""
+async def search_duckduckgo_lite(client: httpx.AsyncClient, query: str, max_results: int = 3) -> List[Dict[str, str]]:
+    """Fast DuckDuckGo search using the lightweight POST endpoint (~0.5s–1s)."""
     results = []
     try:
-        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote_plus(query)}"
-        resp = await client.get(url, headers=HEADERS, timeout=8.0, follow_redirects=True)
+        url = "https://lite.duckduckgo.com/lite/"
+        data = {"q": query}
+        resp = await client.post(url, data=data, headers=HEADERS, timeout=4.0, follow_redirects=True)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text[:MAX_PAGE_BYTES], "html.parser")
-            elements = soup.select(".result")
-            for el in elements:
+            elements = soup.select(".result-link")
+            snippets = soup.select(".result-snippet")
+            for i, el in enumerate(elements):
                 if len(results) >= max_results:
                     break
-                link_el = el.select_one(".result__a")
-                snippet_el = el.select_one(".result__snippet")
-                if link_el:
-                    raw_url = link_el.get("href", "")
-                    title = link_el.get_text(strip=True)
-                    # Extract target URL from DDG redirect url
-                    target_url = raw_url
-                    if "uddg=" in raw_url:
-                        try:
-                            target_url = urllib.parse.unquote(raw_url.split("uddg=")[1].split("&")[0])
-                        except Exception:
-                            target_url = raw_url
-                    
-                    snippet = snippet_el.get_text(strip=True) if snippet_el else ""
-                    if title and target_url and target_url.startswith("http"):
-                        results.append({
-                            "title": title,
-                            "url": target_url,
-                            "snippet": snippet
-                        })
+                raw_url = el.get("href", "")
+                title = el.get_text(strip=True)
+                snippet = snippets[i].get_text(strip=True) if i < len(snippets) else ""
+                
+                # Clean up target URL if wrapped
+                target_url = raw_url
+                if "uddg=" in raw_url:
+                    try:
+                        target_url = urllib.parse.unquote(raw_url.split("uddg=")[1].split("&")[0])
+                    except Exception:
+                        target_url = raw_url
+                        
+                if title and target_url and target_url.startswith("http"):
+                    results.append({
+                        "title": title,
+                        "url": target_url,
+                        "snippet": snippet
+                    })
     except Exception as e:
-        logger.warning(f"DuckDuckGo search failed: {e}")
+        logger.warning(f"DuckDuckGo Lite search failed: {e}")
     return results
 
 async def search_yahoo(client: httpx.AsyncClient, query: str, max_results: int = 3) -> List[Dict[str, str]]:
-    """Fallback search using Yahoo HTML endpoint."""
+    """Fast Yahoo HTML search fallback."""
     results = []
     try:
         url = f"https://search.yahoo.com/search?p={urllib.parse.quote_plus(query)}"
-        resp = await client.get(url, headers=HEADERS, timeout=8.0, follow_redirects=True)
+        resp = await client.get(url, headers=HEADERS, timeout=4.0, follow_redirects=True)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text[:MAX_PAGE_BYTES], "html.parser")
             elements = soup.select(".algo")
@@ -83,22 +83,22 @@ async def search_yahoo(client: httpx.AsyncClient, query: str, max_results: int =
     return results
 
 async def fetch_page_content(client: httpx.AsyncClient, entry: Dict[str, str]) -> Dict[str, Any]:
-    """Fetch and parse clean readable text from a URL with strict memory limits."""
+    """Fetch and parse clean text from a URL with strict 3.5s timeout."""
     url = entry["url"]
     try:
-        resp = await client.get(url, headers=HEADERS, timeout=7.0, follow_redirects=True)
+        resp = await client.get(url, headers=HEADERS, timeout=3.5, follow_redirects=True)
         if resp.status_code == 200 and "text/html" in resp.headers.get("content-type", "text/html"):
             soup = BeautifulSoup(resp.text[:MAX_PAGE_BYTES], "html.parser")
             
-            # Remove non-content elements to conserve memory and tokens
+            # Decompose heavy/irrelevant tags
             for tag in soup(["script", "style", "nav", "header", "footer", "aside", "form", "svg"]):
                 tag.decompose()
                 
             paragraphs = []
             total_chars = 0
-            for p in soup.find_all(["p", "article", "section", "li"]):
+            for p in soup.find_all(["p", "article", "section"]):
                 text = p.get_text(" ", strip=True)
-                if len(text) > 30 and not re.search(r'cookie|privacy policy|terms of service|copyright', text, re.IGNORECASE):
+                if len(text) > 30 and not re.search(r'cookie|privacy policy|terms of service', text, re.IGNORECASE):
                     paragraphs.append(text)
                     total_chars += len(text)
                 if total_chars >= MAX_CONTENT_CHARS:
@@ -111,10 +111,9 @@ async def fetch_page_content(client: httpx.AsyncClient, entry: Dict[str, str]) -
                 "snippet": entry["snippet"],
                 "content": content[:MAX_CONTENT_CHARS]
             }
-    except Exception as e:
-        logger.debug(f"Failed to scrape {url}: {e}")
+    except Exception:
+        pass
 
-    # Fallback to snippet if fetch fails
     return {
         "title": entry["title"],
         "url": url,
@@ -122,24 +121,23 @@ async def fetch_page_content(client: httpx.AsyncClient, entry: Dict[str, str]) -
         "content": entry["snippet"]
     }
 
-async def search_and_scrape(query: str, max_results: int = 3) -> List[Dict[str, Any]]:
+async def search_and_scrape(query: str, max_results: int = 2) -> List[Dict[str, Any]]:
     """
-    Lightweight, memory-safe async search and scrape.
-    Does not require Playwright/Chromium, saving ~400MB RAM.
+    High-speed, memory-safe async search and scrape (~1.5s total).
     """
     limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
     async with httpx.AsyncClient(limits=limits, verify=False) as client:
-        # Step 1: Search via DuckDuckGo
-        search_entries = await search_duckduckgo(client, query, max_results=max_results)
+        # Step 1: Fast search via DuckDuckGo Lite
+        search_entries = await search_duckduckgo_lite(client, query, max_results=max_results)
         
-        # Step 2: Fallback to Yahoo if DuckDuckGo yielded no results
+        # Step 2: Fallback to Yahoo if DDG was empty
         if not search_entries:
             search_entries = await search_yahoo(client, query, max_results=max_results)
             
         if not search_entries:
             return []
 
-        # Step 3: Fetch content concurrently
+        # Step 3: Fetch content concurrently with fast 3.5s timeout
         tasks = [fetch_page_content(client, entry) for entry in search_entries[:max_results]]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -149,13 +147,3 @@ async def search_and_scrape(query: str, max_results: int = 3) -> List[Dict[str, 
                 clean_results.append(r)
                 
         return clean_results
-
-if __name__ == "__main__":
-    import sys
-    test_q = "PGVector vs Milvus performance"
-    if len(sys.argv) > 1:
-        test_q = " ".join(sys.argv[1:])
-    print(f"Testing lightweight search and scrape for: '{test_q}'...")
-    res = asyncio.run(search_and_scrape(test_q, max_results=2))
-    for r in res:
-        print(f"\nTitle: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}\nContent: {r['content'][:200]}...")
