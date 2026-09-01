@@ -182,10 +182,7 @@ async def websocket_research(websocket: WebSocket):
             msg_type = data.get("type", "start")
             
             if msg_type == "start":
-                run_id = data.get("run_id")
-                if not run_id:
-                    await websocket.send_text(json.dumps({"error": "run_id is required."}))
-                    continue
+                run_id = data.get("run_id") or f"run_{int(time.time() * 1000)}"
                 
                 query = data.get("query", "")
                 mode = data.get("mode", "simulation")

@@ -59,8 +59,10 @@ export default function App() {
 
     ws.onopen = () => {
       // Send execution configuration payload
+      const runId = 'run_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
       const payload = {
         type: 'start',
+        run_id: runId,
         query,
         mode,
         provider,
