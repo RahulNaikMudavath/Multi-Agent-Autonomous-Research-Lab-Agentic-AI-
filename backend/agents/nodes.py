@@ -89,10 +89,11 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
         if not search_queries:
             search_queries = [query]
             
+        queries_str = ', '.join([f'"{q}"' for q in search_queries])
         logs.append({
             "agent": "Researcher",
             "status": "searching",
-            "message": f"Generated search queries: {', '.join([f'\"{q}\"' for q in search_queries])}"
+            "message": f"Generated search queries: {queries_str}"
         })
         
         results = []

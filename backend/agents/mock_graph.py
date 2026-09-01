@@ -76,11 +76,12 @@ async def run_mock_research(query: str, queue: asyncio.Queue = None, speed: floa
         f"{query} hardware requirements architecture",
         f"{query} developer review limitations"
     ]
-    add_log("Researcher", "searching", f"Queries launched: {', '.join([f'\"{q}\"' for q in queries])}")
+    queries_str = ', '.join([f'"{q}"' for q in queries])
+    add_log("Researcher", "searching", f"Queries launched: {queries_str}")
     yield json.dumps(state)
     await asyncio.sleep(1.5)
 
-    add_log("Researcher", "scraping", "Scraping tech blogs, benchmarks, and vector DB documentation using Playwright...")
+    add_log("Researcher", "scraping", "Searching web and scraping tech blogs, benchmarks, and documentation...")
     yield json.dumps(state)
     await asyncio.sleep(3.0)
 
