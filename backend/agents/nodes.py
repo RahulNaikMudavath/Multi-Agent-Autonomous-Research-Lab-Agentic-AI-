@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from typing import Dict, Any, List
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -31,8 +32,9 @@ def get_llm(config: RunnableConfig):
     
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
+        model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
         return ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", 
+            model=model_name, 
             google_api_key=api_key,
             temperature=0.2
         )
