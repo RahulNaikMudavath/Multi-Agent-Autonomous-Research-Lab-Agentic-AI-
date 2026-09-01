@@ -10,7 +10,7 @@ env/
 
 # Node
 node_modules/
-dist/
+# dist/ is tracked for zero-dependency Python deployment
 .env.local
 .env.development.local
 .env.test.local
