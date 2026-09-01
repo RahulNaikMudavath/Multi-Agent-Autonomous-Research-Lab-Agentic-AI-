@@ -125,12 +125,12 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
                         "message": f"Tavily search failed for '{s_query}': {str(ex)}"
                     })
         
-        # If Tavily key not provided or search results empty, use Playwright to scrape DuckDuckGo
+        # If Tavily key not provided or search results empty, use lightweight web scraper
         if not results:
             logs.append({
                 "agent": "Researcher",
                 "status": "scraping",
-                "message": "No Tavily key or results. Using Playwright to scrape DuckDuckGo..."
+                "message": "Searching web and extracting content from top sources..."
             })
             for s_query in search_queries[:2]:
                 try:
@@ -140,7 +140,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
                     logs.append({
                         "agent": "Researcher",
                         "status": "error",
-                        "message": f"Playwright scrape failed for '{s_query}': {str(ex)}"
+                        "message": f"Web scrape failed for '{s_query}': {str(ex)}"
                     })
         
         if not results:

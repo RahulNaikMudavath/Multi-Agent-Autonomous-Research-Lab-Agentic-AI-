@@ -1,14 +1,28 @@
-import asyncio
+import asyncio as real_asyncio
 import json
 from typing import AsyncGenerator, Dict, Any
+from contextvars import ContextVar
 
-async def run_mock_research(query: str, queue: asyncio.Queue = None) -> AsyncGenerator[str, None]:
+sim_speed = ContextVar("sim_speed", default=1.0)
+
+class AsyncioWrapper:
+    def __getattr__(self, name):
+        return getattr(real_asyncio, name)
+    
+    async def sleep(self, delay, *args, **kwargs):
+        speed = sim_speed.get()
+        await real_asyncio.sleep(delay / max(0.01, speed))
+
+asyncio = AsyncioWrapper()
+
+async def run_mock_research(query: str, queue: asyncio.Queue = None, speed: float = 1.0) -> AsyncGenerator[str, None]:
     """
     Simulates the multi-agent LangGraph workflow step-by-step, yielding
     state updates in JSON string format. It features loops:
     Fact-Checker flags a discrepancy -> Writer fixes it.
     Critic requests layout improvement -> Writer adds a table -> Critic approves.
     """
+    sim_speed.set(speed)
     state = {
         "query": query,
         "research_plan": None,

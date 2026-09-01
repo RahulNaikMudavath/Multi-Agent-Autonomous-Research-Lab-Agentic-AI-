@@ -13,6 +13,10 @@ export default function App() {
   const [provider, setProvider] = useState(() => localStorage.getItem('research_provider') || 'gemini');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('research_api_key') || '');
   const [tavilyKey, setTavilyKey] = useState(() => localStorage.getItem('research_tavily_key') || '');
+  const [speed, setSpeed] = useState(() => {
+    const savedSpeed = localStorage.getItem('research_speed');
+    return savedSpeed ? parseFloat(savedSpeed) : 1;
+  });
   
   // Execution status state
   const [isRunning, setIsRunning] = useState(false);
@@ -20,6 +24,7 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [draftReport, setDraftReport] = useState(null);
   const [finalReport, setFinalReport] = useState(null);
+  const [researchResults, setResearchResults] = useState([]);
   const [awaitingReview, setAwaitingReview] = useState(false);
   
   const wsRef = useRef(null);
@@ -34,10 +39,22 @@ export default function App() {
     ]);
     setDraftReport(null);
     setFinalReport(null);
+    setResearchResults([]);
     setAwaitingReview(false);
 
-    // Initialize WebSocket connection
-    const ws = new WebSocket('ws://localhost:8000/ws/research');
+    // Initialize dynamic WebSocket connection (auto-detects HTTPS/WSS in production on Render)
+    const getWebSocketUrl = () => {
+      if (import.meta.env.VITE_WS_URL) {
+        return import.meta.env.VITE_WS_URL;
+      }
+      if (window.location.hostname === 'localhost' && window.location.port === '5173') {
+        return 'ws://localhost:8000/ws/research';
+      }
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.host}/ws/research`;
+    };
+
+    const ws = new WebSocket(getWebSocketUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -48,7 +65,8 @@ export default function App() {
         mode,
         provider,
         api_key: apiKey,
-        tavily_key: tavilyKey
+        tavily_key: tavilyKey,
+        speed
       };
       ws.send(JSON.stringify(payload));
     };
@@ -70,6 +88,7 @@ export default function App() {
         if (data.logs) setLogs(data.logs);
         if (data.draft_report) setDraftReport(data.draft_report);
         if (data.final_report) setFinalReport(data.final_report);
+        if (data.research_results) setResearchResults(data.research_results);
         if (data.awaiting_review !== undefined) setAwaitingReview(data.awaiting_review);
 
         // Terminate UI execution if workflow is finalized or errored
@@ -148,6 +167,10 @@ export default function App() {
     localStorage.setItem('research_query', query);
   }, [query]);
 
+  useEffect(() => {
+    localStorage.setItem('research_speed', speed.toString());
+  }, [speed]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -199,6 +222,8 @@ export default function App() {
         setApiKey={setApiKey}
         tavilyKey={tavilyKey}
         setTavilyKey={setTavilyKey}
+        speed={speed}
+        setSpeed={setSpeed}
         isRunning={isRunning}
         awaitingReview={awaitingReview}
         onSendReview={sendReview}
@@ -224,6 +249,7 @@ export default function App() {
           <ReportViewer 
             draftReport={draftReport} 
             finalReport={finalReport} 
+            researchResults={researchResults}
             isRunning={isRunning}
             activeAgent={activeAgent}
           />

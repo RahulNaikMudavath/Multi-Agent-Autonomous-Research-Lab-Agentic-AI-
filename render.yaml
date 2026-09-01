@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: multi-agent-research-lab
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: "bash build.sh"
+    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT --workers 1"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false

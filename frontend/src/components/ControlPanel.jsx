@@ -12,6 +12,8 @@ export default function ControlPanel({
   setApiKey, 
   tavilyKey, 
   setTavilyKey, 
+  speed,
+  setSpeed,
   isRunning, 
   awaitingReview,
   onSendReview,
@@ -115,6 +117,30 @@ export default function ControlPanel({
                   </button>
                 </div>
               </div>
+
+              {mode === 'simulation' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', animation: 'fadeIn 0.2s ease' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Simulation Speed</span>
+                  <div className="toggle-group">
+                    {[
+                      { label: '1x', value: 1 },
+                      { label: '2x', value: 2 },
+                      { label: '5x', value: 5 },
+                      { label: 'Instant', value: 100 }
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        className={`toggle-btn ${speed === opt.value ? 'active' : ''}`}
+                        onClick={() => setSpeed(opt.value)}
+                        disabled={isRunning}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {mode === 'real' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

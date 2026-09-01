@@ -7,6 +7,7 @@ An advanced, stateful, multi-agent AI research system built with **LangGraph** o
 ## 🌟 Key Features
 
 * **Multi-Agent Collaboration Graph:** Structured workflow orchestrating five specialized agents using LangGraph.
+* **Zero-OOM Cloud Optimized:** Engineered for low-memory environments (runs comfortably inside Render's 512MB free tier at ~85MB RAM).
 * **Real-Time Execution Logs:** WebSocket streaming of logs, active agent markers, and output status.
 * **Factual Verification & Anti-Hallucination:** Fact-checker agent cross-references drafted claims against raw search outputs.
 * **Human-in-the-Loop (HITL):** Critic agent pauses execution to await manual editorial approval or revision requests from the frontend UI.
@@ -42,7 +43,7 @@ graph TD
 
 ### Specialized Agents & Roles
 1. **Coordinator Agent:** Analyzes the research query and designs a detailed markdown-based research plan.
-2. **Researcher Agent:** Generates search queries and retrieves sources via the **Tavily API** (or falls back to **Playwright DuckDuckGo scraping**), then summarizes raw content.
+2. **Researcher Agent:** Generates search queries and retrieves sources via the **Tavily API** (or falls back to an ultra-lightweight **async HTTP web search/scraper**), then summarizes raw content.
 3. **Writer Agent:** Aggregates findings and drafts a comprehensive, formatted technical report.
 4. **Fact-Checker Agent:** Validates assertions (benchmarks, technical claims, URLs) against raw sources to eliminate hallucinations.
 5. **Critic Agent (Lead Editor):** Inspects formatting, clarity, and depth. It exposes a pause state requesting human feedback.
@@ -57,10 +58,10 @@ graph TD
 │   │   ├── graph.py          # LangGraph structure and edge routing
 │   │   ├── nodes.py          # Core implementation & LLM prompts for each agent
 │   │   ├── state.py          # State variables shared between agents
-│   │   ├── scraper.py        # Playwright scraper fallback for DuckDuckGo
+│   │   ├── scraper.py        # Lightweight memory-safe async search and scraper
 │   │   └── mock_graph.py     # Simulation mode execution path
-│   ├── main.py               # FastAPI server & WebSocket router
-│   ├── requirements.txt      # Python dependencies
+│   ├── main.py               # FastAPI server, WebSocket router & SPA static hosting
+│   ├── requirements.txt      # Python dependencies (UTF-8, Playwright-free)
 │   └── .env                  # Environment configuration (API keys)
 │
 ├── frontend/
@@ -68,17 +69,31 @@ graph TD
 │   │   ├── components/
 │   │   │   ├── AgentGraph.jsx   # Interactive canvas visualization (@xyflow/react)
 │   │   │   ├── ControlPanel.jsx # Inputs for queries, mode, and credentials
-│   │   │   └── LogsPanel.jsx    # Real-time WebSocket terminal logs
-│   │   ├── App.jsx           # Main layout & WebSocket context manager
+│   │   │   ├── LogsPanel.jsx    # Real-time WebSocket terminal logs
+│   │   │   └── ReportViewer.jsx # Report rendering & exports
+│   │   ├── App.jsx           # Main layout & dynamic WebSocket manager
 │   │   ├── App.css
 │   │   └── index.css         # Styling system
 │   ├── package.json
 │   └── vite.config.js
+│
+├── build.sh                  # Automated Render build script
+├── render.yaml               # Render Blueprint infrastructure-as-code
+├── Dockerfile                # Multi-stage production container
+└── RENDER_DEPLOYMENT.md      # Step-by-step Render hosting guide
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Cloud Deployment (Render)
+
+Deploying to Render takes 1 click with the included `render.yaml` Blueprint or manual web service.
+
+👉 **See complete step-by-step instructions in [RENDER_DEPLOYMENT.md](file:///RENDER_DEPLOYMENT.md).**
+
+---
+
+## 💻 Local Development
 
 ### Prerequisites
 * Python 3.10+
@@ -99,7 +114,7 @@ graph TD
    ```bash
    pip install -r requirements.txt
    ```
-4. Create a `.env` file inside the `backend` folder:
+4. Create a `.env` file inside the `backend` folder (optional, can also be provided in UI):
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
    OPENAI_API_KEY=your_openai_api_key_here

@@ -24,3 +24,7 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Power BI Project
+customer-churn-rfm-powerbi/
+
