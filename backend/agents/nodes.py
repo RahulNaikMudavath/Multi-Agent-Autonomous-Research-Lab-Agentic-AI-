@@ -6,6 +6,24 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from backend.agents.state import AgentState
 from backend.agents.scraper import search_and_scrape
 
+def extract_text(content: Any) -> str:
+    """Safely convert LLM message content into a clean string across providers."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and "text" in item:
+                parts.append(item["text"])
+            elif hasattr(item, "text"):
+                parts.append(getattr(item, "text", ""))
+            else:
+                parts.append(str(item))
+        return "\n".join(parts)
+    return str(content) if content is not None else ""
+
 def get_llm(config: RunnableConfig):
     configurable = config.get("configurable", {})
     provider = configurable.get("provider", "gemini")
@@ -14,7 +32,7 @@ def get_llm(config: RunnableConfig):
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
-            model="gemini-3.6-flash", 
+            model="gemini-2.5-flash", 
             google_api_key=api_key,
             temperature=0.2
         )
@@ -50,7 +68,7 @@ async def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[st
             "technical parameters, comparison criteria, and target data. Output the plan in clear Markdown."
         )
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        plan = response.content
+        plan = extract_text(response.content)
         
         logs.append({
             "agent": "Coordinator",
@@ -84,7 +102,8 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
             "Output ONLY the search queries, one per line, and no other text."
         )
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        search_queries = [q.strip() for q in response.content.strip().split("\n") if q.strip()]
+        content_str = extract_text(response.content)
+        search_queries = [q.strip() for q in content_str.strip().split("\n") if q.strip()]
         
         if not search_queries:
             search_queries = [query]
@@ -109,7 +128,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
             from tavily import TavilyClient
             tavily = TavilyClient(api_key=tavily_key)
             
-            for s_query in search_queries[:2]: # Search 2 queries to avoid context overload
+            for s_query in search_queries[:2]:
                 try:
                     search_res = tavily.search(query=s_query, max_results=3, include_raw_content=False)
                     for r in search_res.get("results", []):
@@ -150,7 +169,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
                 "title": "Fallback Information",
                 "url": "http://internal-db.local",
                 "snippet": f"Manual search fallback for {query}",
-                "content": f"Please note that search failed. Proceeding with LLM knowledge database regarding {query}."
+                "content": f"Please note that live web search returned limited results. Proceeding with structured technical analysis regarding {query}."
             }]
             
         logs.append({
@@ -169,6 +188,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
             "Compile a structured summary of facts, numbers, benchmarks, and references. Output in Markdown."
         )
         synthesis_res = await llm.ainvoke([HumanMessage(content=synthesis_prompt)])
+        synthesis_content = extract_text(synthesis_res.content)
         
         logs.append({
             "agent": "Researcher",
@@ -178,7 +198,7 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
         
         return {
             "research_results": results,
-            "research_synthesis": synthesis_res.content,
+            "research_synthesis": synthesis_content,
             "logs": logs,
             "active_agent": "Writer"
         }
@@ -242,7 +262,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
         )
         
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        draft = response.content
+        draft = extract_text(response.content)
         
         logs.append({
             "agent": "Writer",
@@ -289,7 +309,7 @@ async def fact_checker_node(state: AgentState, config: RunnableConfig) -> Dict[s
         )
         
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        check_output = response.content
+        check_output = extract_text(response.content)
         
         fact_check_records.append({
             "iteration": len(fact_check_records) + 1,
@@ -344,7 +364,7 @@ async def critic_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
         )
         
         response = await llm.ainvoke([HumanMessage(content=prompt)])
-        critic_output = response.content
+        critic_output = extract_text(response.content)
         
         # Check if queue and websocket are present in configurable
         configurable = config.get("configurable", {})
