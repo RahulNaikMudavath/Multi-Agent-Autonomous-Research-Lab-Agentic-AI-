@@ -20,13 +20,22 @@ export default function App() {
     return savedSpeed ? parseFloat(savedSpeed) : 1;
   });
   
-  // Execution status state
+  // Execution status state with auto-restoration from last session
+  const [lastActiveSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('last_active_research_session_v1');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [isRunning, setIsRunning] = useState(false);
-  const [activeAgent, setActiveAgent] = useState(null);
-  const [logs, setLogs] = useState([]);
-  const [draftReport, setDraftReport] = useState(null);
-  const [finalReport, setFinalReport] = useState(null);
-  const [researchResults, setResearchResults] = useState([]);
+  const [activeAgent, setActiveAgent] = useState(() => lastActiveSession?.activeAgent || null);
+  const [logs, setLogs] = useState(() => lastActiveSession?.logs || []);
+  const [draftReport, setDraftReport] = useState(() => lastActiveSession?.draftReport || null);
+  const [finalReport, setFinalReport] = useState(() => lastActiveSession?.finalReport || null);
+  const [researchResults, setResearchResults] = useState(() => lastActiveSession?.researchResults || []);
   const [awaitingReview, setAwaitingReview] = useState(false);
 
   // History / Dossiers Drawer state
@@ -41,6 +50,24 @@ export default function App() {
   });
   
   const wsRef = useRef(null);
+
+  // Automatically persist active session so refreshing or updating never loses report contents
+  useEffect(() => {
+    if (finalReport || draftReport || researchResults.length > 0) {
+      try {
+        localStorage.setItem('last_active_research_session_v1', JSON.stringify({
+          query,
+          activeAgent,
+          logs,
+          draftReport,
+          finalReport,
+          researchResults
+        }));
+      } catch (err) {
+        console.warn('Failed to persist active session', err);
+      }
+    }
+  }, [finalReport, draftReport, researchResults, activeAgent, logs, query]);
 
   // Auto-save completed session into Dossiers History
   const saveSessionToHistory = (sessionQuery, fReport, dReport, results, pMode, pProvider, pModel) => {
