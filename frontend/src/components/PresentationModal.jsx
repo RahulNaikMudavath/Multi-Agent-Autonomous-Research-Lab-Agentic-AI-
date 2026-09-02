@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   X, 
   ChevronLeft, 
@@ -12,6 +13,7 @@ import {
   Award,
   Sparkles
 } from 'lucide-react';
+import { normalizeMarkdown } from '../utils/markdownUtils';
 
 export default function PresentationModal({ isOpen, onClose, report, query }) {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -19,7 +21,8 @@ export default function PresentationModal({ isOpen, onClose, report, query }) {
   const modalRef = useRef(null);
 
   // Parse markdown report into presentation slides
-  const parseSlides = (markdown) => {
+  const parseSlides = (rawMarkdown) => {
+    const markdown = normalizeMarkdown(rawMarkdown);
     if (!markdown) return [];
 
     // Extract title
@@ -203,7 +206,7 @@ export default function PresentationModal({ isOpen, onClose, report, query }) {
                 <h2 className="slide-section-title">{current.title}</h2>
               </div>
               <div className="slide-markdown-body">
-                <ReactMarkdown>{current.content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{current.content}</ReactMarkdown>
               </div>
             </div>
           )}

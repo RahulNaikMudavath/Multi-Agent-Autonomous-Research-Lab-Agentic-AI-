@@ -53,6 +53,11 @@ def extract_text(content: Any) -> str:
     # Strip <think>...</think> and </think> tags from reasoning models (e.g. Qwen, DeepSeek, OpenAI-OSS)
     clean_str = re.sub(r'<think>[\s\S]*?</think>', '', raw_str, flags=re.DOTALL)
     clean_str = re.sub(r'</?think>', '', clean_str)
+
+    # Automatically uncollapse markdown table rows placed on the same line (e.g. | col | col | | --- | | val |)
+    clean_str = re.sub(r'\|\s*\|\s*', '|\n| ', clean_str)
+    clean_str = re.sub(r'\|\s*(\|[-:\s|]+\|)\s*\|', r'|\n\1\n|', clean_str)
+
     return clean_str.strip()
 
 def get_llm(config: RunnableConfig, model_name: Optional[str] = None, max_output_tokens: int = 2048):
@@ -404,7 +409,8 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
             "Strict Output Rules:\n"
             "- Write ONLY the final publication report in Markdown.\n"
             "- Do NOT include any <think> tags, internal thought processes, or conversational preamble.\n"
-            "- Ensure all metrics and terminology match the actual subject matter accurately."
+            "- Ensure all metrics and terminology match the actual subject matter accurately.\n"
+            "- CRITICAL TABLE FORMATTING: Always place each markdown table row on its own separate new line (e.g. | Feature | Triumph Speed 400 | Guerilla 450 |\n| :--- | :--- | :--- |\n| Engine | 398cc liquid-cooled | 452cc liquid-cooled |). Never place multiple table rows on the same line."
         )
         
         draft = await call_llm_resilient(config, [HumanMessage(content=prompt)], max_output_tokens=3500, logs=logs, agent_name="Writer")

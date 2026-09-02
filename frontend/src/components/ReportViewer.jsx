@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   FileText, 
   Award, 
@@ -19,6 +20,7 @@ import VisualCharts from './VisualCharts';
 import ChatWithReport from './ChatWithReport';
 import VoiceBriefing from './VoiceBriefing';
 import PresentationModal from './PresentationModal';
+import { normalizeMarkdown } from '../utils/markdownUtils';
 
 export default function ReportViewer({ 
   query = '',
@@ -35,7 +37,8 @@ export default function ReportViewer({
   const [expandedSources, setExpandedSources] = useState({});
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
 
-  const report = finalReport || draftReport;
+  const rawReport = finalReport || draftReport;
+  const report = normalizeMarkdown(rawReport);
 
   const toggleSource = (index) => {
     setExpandedSources(prev => ({
@@ -425,7 +428,7 @@ export default function ReportViewer({
           ) : (
             <div className="markdown-body">
               <VoiceBriefing report={report} />
-              <ReactMarkdown>{report}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{report}</ReactMarkdown>
             </div>
           )
         )}

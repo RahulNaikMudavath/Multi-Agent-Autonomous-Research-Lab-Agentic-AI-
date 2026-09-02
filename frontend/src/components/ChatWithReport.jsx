@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Send, Bot, User, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { normalizeMarkdown } from '../utils/markdownUtils';
 
 export default function ChatWithReport({ 
   query, 
@@ -200,7 +202,7 @@ export default function ChatWithReport({
                   color: 'var(--text-primary)'
                 }}
               >
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{normalizeMarkdown(msg.content)}</ReactMarkdown>
               </div>
 
               {isUser && (
