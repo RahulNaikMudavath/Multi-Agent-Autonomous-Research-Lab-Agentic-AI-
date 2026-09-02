@@ -592,21 +592,24 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
-  height: 100%;
-  padding: 24px;
-  gap: 24px;
+  min-height: 100%;
+  padding: 10px 16px 20px 16px;
+  gap: 10px;
+  box-sizing: border-box;
+  animation: fadeIn 0.3s ease;
 }
 
 /* Radar & Orbit Visualizer */
 .radar-container {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 4px;
 }
 
 .radar-circle {
@@ -616,57 +619,59 @@ body {
 }
 
 .circle-1 {
-  width: 120px;
-  height: 120px;
+  width: 56px;
+  height: 56px;
   border-top-color: var(--accent-cyan);
   border-bottom-color: var(--accent-cyan);
   animation: spin-clockwise 4s linear infinite;
   filter: drop-shadow(0 0 4px var(--accent-cyan));
-  opacity: 0.6;
-}
-
-.circle-2 {
-  width: 90px;
-  height: 90px;
-  border-left-color: var(--accent-purple);
-  border-right-color: var(--accent-purple);
-  animation: spin-counter-clockwise 3s linear infinite;
-  filter: drop-shadow(0 0 6px var(--accent-purple));
   opacity: 0.7;
 }
 
+.circle-2 {
+  width: 42px;
+  height: 42px;
+  border-left-color: var(--accent-purple);
+  border-right-color: var(--accent-purple);
+  animation: spin-counter-clockwise 3s linear infinite;
+  filter: drop-shadow(0 0 5px var(--accent-purple));
+  opacity: 0.8;
+}
+
 .circle-3 {
-  width: 60px;
-  height: 60px;
+  width: 28px;
+  height: 28px;
   border-top-color: var(--accent-green);
   border-left-color: var(--accent-green);
   animation: spin-clockwise 2s linear infinite;
   filter: drop-shadow(0 0 3px var(--accent-green));
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 .radar-core {
   position: absolute;
-  width: 32px;
-  height: 32px;
+  width: 16px;
+  height: 16px;
   background: radial-gradient(circle, var(--accent-cyan) 0%, rgba(0, 240, 255, 0.1) 70%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 15px var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan);
 }
 
 .spinning-core {
   color: #08090d;
+  width: 10px !important;
+  height: 10px !important;
   animation: spin-clockwise 2.5s linear infinite;
 }
 
 .radar-pulse {
   position: absolute;
-  width: 120px;
-  height: 120px;
-  border: 2px solid var(--accent-cyan);
+  width: 56px;
+  height: 56px;
+  border: 1.5px solid var(--accent-cyan);
   border-radius: 50%;
   opacity: 0;
   animation: radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
@@ -676,18 +681,20 @@ body {
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .loading-status-title h3 {
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--text-primary);
+  margin: 0;
 }
 
 .active-agent-desc {
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
+  margin: 0;
 }
 
 .active-agent-badge {
@@ -697,7 +704,7 @@ body {
   padding: 2px 8px;
   border-radius: 12px;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   box-shadow: 0 0 8px rgba(189, 92, 255, 0.1);
@@ -708,52 +715,53 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 360px;
-  gap: 12px;
-  margin-top: 8px;
+  max-width: 380px;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .agent-step {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.01);
+  gap: 12px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.015);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .step-bullet {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   border: 1.5px solid var(--border-color);
   color: var(--text-dim);
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
   transition: all 0.3s ease;
 }
 
 .step-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .step-name {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-secondary);
   transition: color 0.3s;
 }
 
 .step-desc {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-dim);
   transition: color 0.3s;
 }
