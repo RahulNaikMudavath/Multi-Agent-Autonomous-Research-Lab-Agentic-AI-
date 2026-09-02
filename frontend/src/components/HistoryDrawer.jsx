@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Search, 
@@ -21,6 +21,20 @@ export default function HistoryDrawer({
   onClearHistory 
 }) {
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -64,32 +78,40 @@ export default function HistoryDrawer({
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      background: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(8px)',
-      zIndex: 1000,
-      display: 'flex',
-      justifyContent: 'flex-end',
-      animation: 'fadeIn 0.2s ease'
-    }}>
-      <div style={{
-        width: '440px',
-        maxWidth: '90vw',
-        height: '100%',
-        background: 'rgba(14, 16, 26, 0.95)',
-        borderLeft: '1px solid var(--border-color)',
-        boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.6)',
+    <div 
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0, 0, 0, 0.7)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 1000,
         display: 'flex',
-        flexDirection: 'column',
-        padding: '20px',
-        gap: '16px',
-        boxSizing: 'border-box'
-      }}>
+        justifyContent: 'flex-end',
+        animation: 'fadeIn 0.2s ease',
+        cursor: 'pointer'
+      }}
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '440px',
+          maxWidth: '90vw',
+          height: '100%',
+          background: 'rgba(14, 16, 26, 0.95)',
+          borderLeft: '1px solid var(--border-color)',
+          boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '20px',
+          gap: '16px',
+          boxSizing: 'border-box',
+          cursor: 'default'
+        }}
+      >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>
