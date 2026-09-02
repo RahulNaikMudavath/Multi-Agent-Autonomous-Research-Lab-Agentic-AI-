@@ -179,6 +179,83 @@ async def run_research_flow(run_id, query, mode, provider, api_key, tavily_key, 
         except Exception:
             pass
 
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+from langchain_core.messages import HumanMessage
+from backend.agents.nodes import call_llm_resilient
+
+class ChatReportRequest(BaseModel):
+    query: str
+    report: str
+    sources: Optional[List[Dict[str, Any]]] = []
+    message: str
+    history: Optional[List[Dict[str, str]]] = []
+    provider: Optional[str] = "groq"
+    model: Optional[str] = ""
+    api_key: Optional[str] = ""
+
+@app.post("/api/chat-report")
+async def chat_report_endpoint(req: ChatReportRequest):
+    """Answers follow-up questions grounded directly in the research report and sources."""
+    if not req.message.strip():
+        return JSONResponse(content={"error": "Message cannot be empty"}, status_code=400)
+    
+    provider_key_map = {
+        "gemini": "GEMINI_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "openai": "OPENAI_API_KEY"
+    }
+    provider = req.provider or "groq"
+    provider_key_name = provider_key_map.get(provider, "GEMINI_API_KEY")
+    effective_api_key = req.api_key or os.getenv(provider_key_name)
+    
+    config = {
+        "configurable": {
+            "provider": provider,
+            "api_key": effective_api_key,
+            "model": req.model
+        }
+    }
+    
+    sources_summary = "\n".join([
+        f"- [{s.get('title', 'Source')}]({s.get('url', '#')}): {s.get('snippet', '')[:200]}"
+        for s in (req.sources or [])[:4]
+    ])
+    
+    history_context = ""
+    if req.history:
+        for turn in req.history[-4:]:
+            role = "User" if turn.get("role") == "user" else "Assistant"
+            history_context += f"{role}: {turn.get('content', '')}\n"
+            
+    prompt = (
+        "You are an expert Research Analyst in an Autonomous AI Research Lab.\n"
+        "Your task is to answer the user's follow-up question accurately and concisely, strictly grounded in the provided research report and verified sources.\n\n"
+        f"ORIGINAL RESEARCH TOPIC: {req.query}\n\n"
+        f"FULL RESEARCH REPORT:\n{req.report[:4000]}\n\n"
+        f"VERIFIED SOURCES:\n{sources_summary}\n\n"
+        f"CONVERSATION HISTORY:\n{history_context}\n"
+        f"USER QUESTION: {req.message}\n\n"
+        "Instructions:\n"
+        "1. Give a clear, direct, and structured answer in Markdown.\n"
+        "2. Use bullet points or bold text where appropriate for readability.\n"
+        "3. If the answer is directly supported by the report, cite specific numbers or facts.\n"
+        "4. Do NOT output any <think> tags or internal monologues."
+    )
+    
+    try:
+        if not effective_api_key:
+            return {
+                "answer": f"Based on the research report for **{req.query}**, the key takeaways emphasize the comparative metrics detailed above. Please configure an active API key to enable live conversational deep dives."
+            }
+        answer = await call_llm_resilient(config, [HumanMessage(content=prompt)], max_output_tokens=1500, agent_name="QA-Agent")
+        return {"answer": answer}
+    except Exception as ex:
+        logger.error(f"Chat report error: {str(ex)}")
+        return {
+            "answer": f"Unable to process query with {provider.upper()} due to: {str(ex)}. Please verify your API key and model selection."
+        }
+
 @app.get("/health")
 def health_check():
     """Healthcheck endpoint for Render / monitoring."""

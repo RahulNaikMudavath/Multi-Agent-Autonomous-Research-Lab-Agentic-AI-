@@ -10,15 +10,23 @@ import {
   Printer, 
   ChevronDown, 
   ChevronUp, 
-  ExternalLink 
+  ExternalLink,
+  BarChart3,
+  MessageSquare
 } from 'lucide-react';
+import VisualCharts from './VisualCharts';
+import ChatWithReport from './ChatWithReport';
 
 export default function ReportViewer({ 
+  query = '',
   draftReport, 
   finalReport, 
   researchResults = [], 
   isRunning, 
-  activeAgent 
+  activeAgent,
+  provider = 'groq',
+  model = '',
+  apiKey = ''
 }) {
   const [activeTab, setActiveTab] = useState('report');
   const [expandedSources, setExpandedSources] = useState({});
@@ -248,15 +256,31 @@ export default function ReportViewer({
             className={`tab-btn ${activeTab === 'report' ? 'active' : ''}`}
             onClick={() => setActiveTab('report')}
           >
-            <FileText size={14} />
+            <FileText size={13} />
             <span>Document</span>
+          </button>
+          <button 
+            type="button"
+            className={`tab-btn ${activeTab === 'charts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('charts')}
+          >
+            <BarChart3 size={13} />
+            <span>Visual Charts</span>
+          </button>
+          <button 
+            type="button"
+            className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+          >
+            <MessageSquare size={13} />
+            <span>Ask AI</span>
           </button>
           <button 
             type="button"
             className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
             onClick={() => setActiveTab('sources')}
           >
-            <Globe size={14} />
+            <Globe size={13} />
             <span>Sources</span>
             {researchResults.length > 0 && (
               <span className="tab-badge">{researchResults.length}</span>
@@ -305,7 +329,7 @@ export default function ReportViewer({
       </div>
 
       <div className="report-content">
-        {activeTab === 'report' ? (
+        {activeTab === 'report' && (
           !report ? (
             isRunning ? (
               <div className="agent-loading-container">
@@ -391,8 +415,24 @@ export default function ReportViewer({
               <ReactMarkdown>{report}</ReactMarkdown>
             </div>
           )
-        ) : (
-          /* Sources & References Tab Body */
+        )}
+
+        {activeTab === 'charts' && (
+          <VisualCharts report={report} />
+        )}
+
+        {activeTab === 'chat' && (
+          <ChatWithReport 
+            query={query} 
+            report={report} 
+            sources={researchResults} 
+            provider={provider} 
+            model={model} 
+            apiKey={apiKey} 
+          />
+        )}
+
+        {activeTab === 'sources' && (
           researchResults.length === 0 ? (
             <div className="report-placeholder">
               <Globe size={40} />

@@ -1,17 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FlaskConical } from 'lucide-react';
+import { FlaskConical, BookOpen } from 'lucide-react';
 import ControlPanel from './components/ControlPanel';
 import AgentGraph from './components/AgentGraph';
 import LogsPanel from './components/LogsPanel';
 import ReportViewer from './components/ReportViewer';
+import HistoryDrawer from './components/HistoryDrawer';
 import './App.css';
 
 export default function App() {
   // Config state
   const [query, setQuery] = useState(() => localStorage.getItem('research_query') || 'Compare the performance of PGVector vs. Milvus for 1M vectors');
   const [mode, setMode] = useState(() => localStorage.getItem('research_mode') || 'real');
-  const [provider, setProvider] = useState(() => localStorage.getItem('research_provider') || 'gemini');
-  const [model, setModel] = useState(() => localStorage.getItem('research_model') || 'gemini-3.6-flash');
+  const [provider, setProvider] = useState(() => localStorage.getItem('research_provider') || 'groq');
+  const [model, setModel] = useState(() => localStorage.getItem('research_model') || 'openai/gpt-oss-120b');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('research_api_key') || '');
   const [tavilyKey, setTavilyKey] = useState(() => localStorage.getItem('research_tavily_key') || '');
   const [speed, setSpeed] = useState(() => {
@@ -27,8 +28,87 @@ export default function App() {
   const [finalReport, setFinalReport] = useState(null);
   const [researchResults, setResearchResults] = useState([]);
   const [awaitingReview, setAwaitingReview] = useState(false);
+
+  // History / Dossiers Drawer state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [history, setHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('research_dossiers_v1');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   
   const wsRef = useRef(null);
+
+  // Auto-save completed session into Dossiers History
+  const saveSessionToHistory = (sessionQuery, fReport, dReport, results, pMode, pProvider, pModel) => {
+    const reportText = fReport || dReport;
+    if (!reportText) return;
+
+    const newRecord = {
+      id: 'dossier_' + Date.now(),
+      timestamp: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      query: sessionQuery || query,
+      mode: pMode || mode,
+      provider: pProvider || provider,
+      model: pModel || model,
+      draftReport: dReport,
+      finalReport: fReport,
+      researchResults: results || []
+    };
+
+    setHistory(prev => {
+      const filtered = prev.filter(item => item.query.toLowerCase() !== newRecord.query.toLowerCase());
+      const updated = [newRecord, ...filtered].slice(0, 30);
+      try {
+        localStorage.setItem('research_dossiers_v1', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Failed to save dossier to localStorage', err);
+      }
+      return updated;
+    });
+  };
+
+  const loadSession = (item) => {
+    setQuery(item.query || '');
+    if (item.mode) setMode(item.mode);
+    if (item.provider) setProvider(item.provider);
+    if (item.model) setModel(item.model);
+    setDraftReport(item.draftReport || null);
+    setFinalReport(item.finalReport || null);
+    setResearchResults(item.researchResults || []);
+    setActiveAgent('Finalize');
+    setLogs([
+      {
+        agent: 'System',
+        status: 'completed',
+        message: `Restored saved research dossier: "${item.query}" (${item.timestamp})`
+      }
+    ]);
+  };
+
+  const deleteSession = (id) => {
+    setHistory(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      try {
+        localStorage.setItem('research_dossiers_v1', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Failed to update localStorage', err);
+      }
+      return updated;
+    });
+  };
+
+  const clearHistory = () => {
+    if (window.confirm('Are you sure you want to clear all saved research dossiers?')) {
+      setHistory([]);
+      try {
+        localStorage.removeItem('research_dossiers_v1');
+      } catch {}
+    }
+  };
 
   const startResearch = () => {
     if (isRunning) return;
@@ -59,7 +139,6 @@ export default function App() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // Send execution configuration payload
       const runId = 'run_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
       const payload = {
         type: 'start',
@@ -87,7 +166,6 @@ export default function App() {
           return;
         }
 
-        // Update application state from LangGraph state frame
         if (data.active_agent) setActiveAgent(data.active_agent);
         if (data.logs) setLogs(data.logs);
         if (data.draft_report) setDraftReport(data.draft_report);
@@ -100,6 +178,18 @@ export default function App() {
           setIsRunning(false);
           setAwaitingReview(false);
           ws.close();
+
+          if (data.active_agent === 'Finalize') {
+            saveSessionToHistory(
+              query,
+              data.final_report || finalReport,
+              data.draft_report || draftReport,
+              data.research_results || researchResults,
+              mode,
+              provider,
+              model
+            );
+          }
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message', err);
@@ -117,7 +207,6 @@ export default function App() {
     ws.onclose = () => {
       setIsRunning(false);
       setAwaitingReview(false);
-      console.log('WebSocket connection closed.');
     };
   };
 
@@ -139,7 +228,6 @@ export default function App() {
         feedback: feedbackText
       }));
       setAwaitingReview(false);
-      // Locally echo the action in logs
       setLogs(prev => [...prev, {
         agent: 'System',
         status: 'planning',
@@ -197,7 +285,7 @@ export default function App() {
   };
 
   const getStatusClass = () => {
-    if (awaitingReview) return 'active'; // or custom pulsing
+    if (awaitingReview) return 'active';
     if (!isRunning) return 'idle';
     if (activeAgent === 'Finalize') return 'completed';
     if (activeAgent === 'Error') return 'error';
@@ -209,12 +297,50 @@ export default function App() {
       {/* Header */}
       <header className="glass-panel app-header">
         <div className="header-logo">
-          <FlaskConical className="logo-icon" size={24} />
+          <FlaskConical className="logo-icon" size={22} />
           <h1>Multi-Agent Autonomous Research Lab</h1>
         </div>
-        <div className="header-status">
-          <span className={`status-dot ${getStatusClass()}`} />
-          <span>Status: <strong>{getStatusText()}</strong></span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Dossiers Library Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsHistoryOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-primary)',
+              borderRadius: '20px',
+              padding: '4px 12px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            title="Open saved research dossiers"
+          >
+            <BookOpen size={13} style={{ color: 'var(--accent-cyan)' }} />
+            <span>Dossiers</span>
+            {history.length > 0 && (
+              <span style={{
+                background: 'rgba(0, 240, 255, 0.15)',
+                color: 'var(--accent-cyan)',
+                padding: '1px 6px',
+                borderRadius: '10px',
+                fontSize: '0.68rem',
+                fontWeight: 700
+              }}>
+                {history.length}
+              </span>
+            )}
+          </button>
+
+          <div className="header-status">
+            <span className={`status-dot ${getStatusClass()}`} />
+            <span>Status: <strong>{getStatusText()}</strong></span>
+          </div>
         </div>
       </header>
 
@@ -255,19 +381,34 @@ export default function App() {
 
         {/* Right: Reports and Logs Console Output */}
         <div className="right-column">
-          {/* Report Viewer */}
+          {/* Report Viewer with Tabs: Document, Visual Charts, Ask AI, Sources */}
           <ReportViewer 
+            query={query}
             draftReport={draftReport} 
             finalReport={finalReport} 
             researchResults={researchResults}
             isRunning={isRunning}
             activeAgent={activeAgent}
+            provider={provider}
+            model={model}
+            apiKey={apiKey}
           />
 
           {/* Console Logs */}
           <LogsPanel logs={logs} />
         </div>
       </div>
+
+      {/* History Dossiers Slide-out Drawer */}
+      <HistoryDrawer
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        history={history}
+        onLoadSession={loadSession}
+        onDeleteSession={deleteSession}
+        onClearHistory={clearHistory}
+      />
     </div>
   );
 }
+
