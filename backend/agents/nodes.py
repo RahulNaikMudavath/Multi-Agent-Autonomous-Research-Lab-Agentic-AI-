@@ -558,84 +558,36 @@ async def critic_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
         except Exception:
             critic_output = "APPROVED: Automated editorial baseline passed."
         
-        configurable = config.get("configurable", {})
-        websocket = configurable.get("websocket")
-        queue = configurable.get("queue")
-        
-        # If interactive human-in-the-loop review is connected
-        if websocket and queue:
-            logs.append({
-                "agent": "Critic",
-                "status": "completed",
-                "message": "Editorial audit complete. Awaiting Human Editor approval/review..."
-            })
-            
-            pause_state = {
-                **state,
-                "logs": logs,
-                "active_agent": "Critic",
-                "awaiting_review": True
-            }
-            await websocket.send_text(json.dumps(pause_state))
-            
-            user_msg_str = await queue.get()
-            user_msg = json.loads(user_msg_str) if isinstance(user_msg_str, str) else user_msg_str
-            feedback = user_msg.get("feedback", "")
-            
-            if feedback.lower() == "approve":
-                status_msg = "Human Editor approved the report. Publishing final output."
-                next_agent = "Finalize"
-                feedback_val = None
-                final = draft
-            else:
-                status_msg = f"Revisions requested: '{feedback}'. Routing back to Writer."
-                next_agent = "Writer"
-                feedback_val = f"USER REQUESTED REVISIONS:\n{feedback}\n\nCRITIC NOTES:\n{critic_output}"
-                final = None
-                
-            logs.append({
-                "agent": "Critic",
-                "status": "completed",
-                "message": status_msg
-            })
-            
-            return {
-                "critic_feedback": feedback_val,
-                "final_report": final,
-                "logs": logs,
-                "active_agent": next_agent,
-                "awaiting_review": False
-            }
+        # Autonomous cyclic evaluation
+        if critic_output.strip().startswith("REVISION NEEDED") and not state.get("critic_feedback"):
+            status_msg = f"Critic requested editorial refinement: {critic_output[:100]}... Routing back to Writer."
+            next_agent = "Writer"
+            feedback = critic_output
+            final = None
         else:
-            if critic_output.strip().startswith("REVISION NEEDED") and not state.get("critic_feedback"):
-                status_msg = "Critic requested minor revisions. Routing to Writer."
-                next_agent = "Writer"
-                feedback = critic_output
-                final = None
-            else:
-                status_msg = "Critic approved the research report! Publishing final output."
-                next_agent = "Finalize"
-                feedback = None
-                final = draft
-                
-            logs.append({
-                "agent": "Critic",
-                "status": "completed",
-                "message": status_msg
-            })
+            status_msg = "Critic approved the publication! Research report verified and published."
+            next_agent = "Finalize"
+            feedback = None
+            final = draft
             
-            return {
-                "critic_feedback": feedback,
-                "final_report": final,
-                "logs": logs,
-                "active_agent": next_agent,
-                "awaiting_review": False
-            }
+        logs.append({
+            "agent": "Critic",
+            "status": "completed",
+            "message": status_msg
+        })
+        
+        return {
+            "critic_feedback": feedback,
+            "final_report": final,
+            "logs": logs,
+            "active_agent": next_agent,
+            "awaiting_review": False
+        }
     except Exception as e:
         logs.append({
             "agent": "Critic",
             "status": "completed",
-            "message": f"Critic completed final audit with standard signoff ({str(e)})."
+            "message": f"Critic completed automated editorial review ({str(e)}). Publishing report."
         })
         return {
             "critic_feedback": None,
