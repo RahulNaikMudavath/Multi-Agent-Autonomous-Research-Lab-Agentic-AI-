@@ -12,10 +12,13 @@ import {
   ChevronUp, 
   ExternalLink,
   BarChart3,
-  MessageSquare
+  MessageSquare,
+  PlaySquare
 } from 'lucide-react';
 import VisualCharts from './VisualCharts';
 import ChatWithReport from './ChatWithReport';
+import VoiceBriefing from './VoiceBriefing';
+import PresentationModal from './PresentationModal';
 
 export default function ReportViewer({ 
   query = '',
@@ -30,6 +33,7 @@ export default function ReportViewer({
 }) {
   const [activeTab, setActiveTab] = useState('report');
   const [expandedSources, setExpandedSources] = useState({});
+  const [isPresentationOpen, setIsPresentationOpen] = useState(false);
 
   const report = finalReport || draftReport;
 
@@ -311,6 +315,14 @@ export default function ReportViewer({
 
           {report && activeTab === 'report' && (
             <div className="export-group">
+              <button 
+                onClick={() => setIsPresentationOpen(true)} 
+                className="export-action-btn present-action-btn" 
+                title="Launch Fullscreen Presentation Deck (Slides)"
+              >
+                <PlaySquare size={13} style={{ color: 'var(--accent-purple)' }} />
+                <span>Deck</span>
+              </button>
               <button onClick={exportMarkdown} className="export-action-btn" title="Download Markdown (.md)">
                 <Download size={13} />
                 <span>MD</span>
@@ -412,6 +424,7 @@ export default function ReportViewer({
             )
           ) : (
             <div className="markdown-body">
+              <VoiceBriefing report={report} />
               <ReactMarkdown>{report}</ReactMarkdown>
             </div>
           )
@@ -510,6 +523,14 @@ export default function ReportViewer({
           )
         )}
       </div>
+
+      {/* Fullscreen Interactive Presentation Deck Modal */}
+      <PresentationModal
+        isOpen={isPresentationOpen}
+        onClose={() => setIsPresentationOpen(false)}
+        report={report}
+        query={query}
+      />
     </div>
   );
 }
