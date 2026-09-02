@@ -31,10 +31,11 @@ OPENAI_FALLBACK_MODELS = [
 ]
 
 def extract_text(content: Any) -> str:
-    """Safely convert LLM message content into a clean string across providers."""
+    """Safely convert LLM message content into a clean string and strip raw reasoning/think tags."""
+    raw_str = ""
     if isinstance(content, str):
-        return content
-    if isinstance(content, list):
+        raw_str = content
+    elif isinstance(content, list):
         parts = []
         for item in content:
             if isinstance(item, str):
@@ -45,8 +46,14 @@ def extract_text(content: Any) -> str:
                 parts.append(getattr(item, "text", ""))
             else:
                 parts.append(str(item))
-        return "\n".join(parts)
-    return str(content) if content is not None else ""
+        raw_str = "\n".join(parts)
+    else:
+        raw_str = str(content) if content is not None else ""
+    
+    # Strip <think>...</think> and </think> tags from reasoning models (e.g. Qwen, DeepSeek, OpenAI-OSS)
+    clean_str = re.sub(r'<think>[\s\S]*?</think>', '', raw_str, flags=re.DOTALL)
+    clean_str = re.sub(r'</?think>', '', clean_str)
+    return clean_str.strip()
 
 def get_llm(config: RunnableConfig, model_name: Optional[str] = None, max_output_tokens: int = 2048):
     configurable = config.get("configurable", {})
@@ -108,7 +115,6 @@ async def call_llm_resilient(
         fallback_list = OPENAI_FALLBACK_MODELS
 
     models_to_try = [initial_model] + [m for m in fallback_list if m != initial_model]
-
 
     last_err = None
     for model_idx, current_model in enumerate(models_to_try):
@@ -177,12 +183,12 @@ async def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[st
     try:
         prompt = (
             "You are the Lead Coordinator of an Autonomous AI Research Lab.\n"
-            f"Topic to investigate: {query}\n\n"
-            "Create a concise, structured research blueprint:\n"
-            "1. Core Technical Objective\n"
-            "2. Critical Evaluation Dimensions (Architecture, Performance, Latency, Scalability, Cost)\n"
-            "3. Key Comparison Questions to Answer\n"
-            "Keep it sharp, technical, and formatted in clean Markdown."
+            f"Topic to investigate: '{query}'\n\n"
+            "Formulate a sharp, structured technical research blueprint tailored specifically to this topic:\n"
+            "1. Core Objective\n"
+            "2. Critical Evaluation Dimensions (tailored to this domain: e.g. engineering specs, performance metrics, efficiency, architecture, trade-offs)\n"
+            "3. Key Comparative Questions to Answer\n"
+            "Format in clean, executive Markdown without any thinking tags or preamble."
         )
         plan = await call_llm_resilient(config, [HumanMessage(content=prompt)], max_output_tokens=1024, logs=logs, agent_name="Coordinator")
         
@@ -200,21 +206,21 @@ async def coordinator_node(state: AgentState, config: RunnableConfig) -> Dict[st
     except Exception as e:
         fallback_plan = (
             f"# Research Blueprint: {query}\n\n"
-            "## 1. Core Technical Objective\n"
+            "## 1. Core Objective\n"
             f"Conduct an in-depth comparative benchmark and architectural evaluation regarding {query}.\n\n"
             "## 2. Evaluation Dimensions\n"
-            "- Core Architecture & Engine Specifications\n"
-            "- Real-world Performance & Throughput Metrics\n"
-            "- Efficiency, Latency & Resource Utilization\n"
-            "- Trade-offs, Scalability & Use Case Fit\n\n"
+            "- Core Specifications & Engineering Design\n"
+            "- Quantitative Performance & Benchmarks\n"
+            "- Efficiency, Dynamics & Practical Usability\n"
+            "- Trade-offs, Reliability & Value Proposition\n\n"
             "## 3. Critical Questions\n"
-            "- How do their key specifications compare quantitatively?\n"
-            "- Under what scenarios does each option excel?"
+            "- How do key metrics compare quantitatively?\n"
+            "- What are the primary strengths and trade-offs of each option?"
         )
         logs.append({
             "agent": "Coordinator",
             "status": "error",
-            "message": f"Coordinator plan generated with offline template due to API notice: {str(e)}"
+            "message": f"Coordinator plan generated with baseline template (Notice: {str(e)})"
         })
         return {
             "research_plan": fallback_plan,
@@ -232,11 +238,11 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
         try:
             prompt = (
                 f"Topic: '{query}'\nPlan:\n{plan}\n\n"
-                "Generate exactly 2 high-precision web search queries to find real benchmark numbers, technical specs, or official docs.\n"
-                "Output ONLY the 2 search queries, one per line."
+                "Generate exactly 2 high-precision web search queries to find real benchmark numbers, technical specs, or official reviews.\n"
+                "Output ONLY the 2 search queries, one per line without markdown formatting or thought tags."
             )
             content_str = await call_llm_resilient(config, [HumanMessage(content=prompt)], max_output_tokens=256, logs=logs, agent_name="Researcher")
-            search_queries = [q.strip().strip('"').strip("'") for q in content_str.strip().split("\n") if q.strip()][:2]
+            search_queries = [q.strip().strip('"').strip("'") for q in content_str.strip().split("\n") if q.strip() and not q.startswith("<")][:2]
         except Exception:
             search_queries = [f"{query} benchmark performance specs", f"{query} technical comparison review"]
         
@@ -296,8 +302,8 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
             results = [{
                 "title": f"Technical Intelligence: {query}",
                 "url": "https://en.wikipedia.org/wiki/Special:Search",
-                "snippet": f"Benchmarking, architectural analysis, and specifications for {query}.",
-                "content": f"Detailed comparative evaluation and performance metrics regarding {query}."
+                "snippet": f"Benchmarking, specifications, and performance data for {query}.",
+                "content": f"Comparative evaluation and metrics regarding {query}."
             }]
             
         logs.append({
@@ -312,8 +318,8 @@ async def researcher_node(state: AgentState, config: RunnableConfig) -> Dict[str
             sources_text += f"Source [{i+1}] ({r.get('title', '')} - {r.get('url', '')}):\n{r.get('content', '')[:1200]}\n\n"
             
         synthesis_prompt = (
-            f"You are the Researcher agent. Summarize the key facts, benchmark data, and architecture specifics for '{query}' from these sources:\n\n{sources_text}\n\n"
-            "Format as concise bullet points: Metrics, Performance Numbers, Strengths, Limitations, and Direct Citations."
+            f"You are the Researcher agent. Summarize the verified facts, benchmark data, and technical specifications for '{query}' from these sources:\n\n{sources_text}\n\n"
+            "Format as concise bullet points: Metrics, Performance Numbers, Strengths, Limitations, and Direct Citations without any think tags."
         )
         
         try:
@@ -381,21 +387,24 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
                 feedback_context += f"\n\nFACT-CHECKER CORRECTIONS REQUIRED:\n{last_check.get('details', '')}"
 
         prompt = (
-            "You are the Lead Writer in an AI Research Lab. Produce an exhaustive, highly technical, publication-ready research report.\n\n"
+            "You are the Lead Writer in an Autonomous AI Research Lab. Produce an exhaustive, highly structured, publication-grade technical research report tailored directly to the specific subject matter.\n\n"
             f"TOPIC: {query}\n\n"
             f"RESEARCH PLAN:\n{plan}\n\n"
             f"FACTUAL SYNTHESIS & BENCHMARKS:\n{research_synthesis}\n\n"
             f"VERIFIED SOURCES:\n{sources_text}"
             f"{feedback_context}\n\n"
-            "Report Requirements:\n"
-            "1. # Professional Title\n"
-            "2. ## Executive Summary (High-level findings, direct verdict)\n"
-            "3. ## Architecture & Technical Deep-Dive\n"
-            "4. ## Quantitative Performance & Benchmarks (Include a Markdown Comparison Matrix/Table with latency, QPS, memory, scalability)\n"
-            "5. ## Code / Implementation Snippets (e.g. indexing, querying, configuration)\n"
-            "6. ## Critical Trade-Offs & Decision Guide (When to choose which)\n"
+            "Report Structure & Sections:\n"
+            "1. # [Comprehensive & Professional Title]\n"
+            "2. ## Executive Summary (High-level findings, core differences, direct bottom-line verdict)\n"
+            "3. ## Technical Specifications & Core Architecture (Engineering specifications, architecture, engine/hardware/software design)\n"
+            "4. ## Quantitative Performance Comparison (Include a clean Markdown Comparison Table with domain-accurate metrics such as horsepower, 0-60 mph, top speed, torque, efficiency, price for vehicles; or throughput, latency, memory, cost for software systems)\n"
+            "5. ## In-Depth Evaluation & Key Capabilities (Real-world testing, handling/dynamics, features, and practical considerations)\n"
+            "6. ## Critical Trade-Offs & Decision Guide (Pros & Cons matrix, when to choose which option)\n"
             "7. ## References (Hyperlinked with real URLs from the verified sources)\n\n"
-            "Provide deep technical rigor and precise metrics."
+            "Strict Output Rules:\n"
+            "- Write ONLY the final publication report in Markdown.\n"
+            "- Do NOT include any <think> tags, internal thought processes, or conversational preamble.\n"
+            "- Ensure all metrics and terminology match the actual subject matter accurately."
         )
         
         draft = await call_llm_resilient(config, [HumanMessage(content=prompt)], max_output_tokens=3500, logs=logs, agent_name="Writer")
@@ -419,10 +428,10 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> Dict[str, An
             f"This publication compiles technical benchmarks, architectural comparisons, and operational characteristics for **{query}**.\n\n"
             "## Quantitative Benchmark Analysis\n\n"
             f"{research_synthesis}\n\n"
-            "| Dimension | Evaluation Notes |\n"
+            "| Metric / Dimension | Comparison Notes |\n"
             "| :--- | :--- |\n"
-            "| **Primary Focus** | Performance, latency, architecture, and throughput |\n"
-            "| **Status** | Verified with multi-agent intelligence |\n\n"
+            "| **Primary Subject** | Technical evaluation & performance metrics |\n"
+            "| **Status** | Synthesized from multi-agent intelligence |\n\n"
             "## References\n"
             + "\n".join([f"- [{r.get('title', 'Source')}]({r.get('url', '#')}): {r.get('snippet', '')[:120]}" for r in results[:4]])
         )

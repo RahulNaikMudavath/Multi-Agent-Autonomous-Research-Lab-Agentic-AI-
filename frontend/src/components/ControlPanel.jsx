@@ -22,11 +22,7 @@ export default function ControlPanel({
   onStart, 
   onStop 
 }) {
-  const [showSettings, setShowSettings] = useState(() => {
-    const storedKey = localStorage.getItem('research_api_key') || '';
-    const storedMode = localStorage.getItem('research_mode') || 'real';
-    return storedMode === 'real' && !storedKey;
-  });
+  const [showSettings, setShowSettings] = useState(false);
   const [revisionText, setRevisionText] = useState('');
 
   const handleSubmit = (e) => {
@@ -37,12 +33,12 @@ export default function ControlPanel({
 
   return (
     <div className="glass-panel control-panel">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div className="search-row">
           <input
             type="text"
             className="search-input"
-            placeholder="Enter research topic (e.g., 'Compare PGVector vs Milvus performance for 1M vectors')..."
+            placeholder="Enter research topic (e.g., 'Compare BMW M4 vs Audi S4' or 'PGVector vs Milvus')..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             disabled={isRunning}
@@ -51,16 +47,17 @@ export default function ControlPanel({
           <button 
             type="button" 
             className="toggle-btn"
+            title="Configure LLM & Execution Settings"
             style={{ 
               border: '1px solid var(--border-color)', 
               borderRadius: '8px', 
-              padding: '0 14px', 
-              background: showSettings ? 'rgba(255,255,255,0.06)' : 'transparent',
+              padding: '0 12px', 
+              background: showSettings ? 'rgba(0, 240, 255, 0.1)' : 'transparent',
               color: showSettings ? 'var(--accent-cyan)' : 'var(--text-secondary)'
             }}
             onClick={() => setShowSettings(!showSettings)}
           >
-            <Settings size={18} />
+            <Settings size={16} />
           </button>
 
           {!isRunning ? (
@@ -69,7 +66,7 @@ export default function ControlPanel({
               className="btn-primary"
               disabled={!query.trim()}
             >
-              <Play size={16} /> Run Research
+              <Play size={15} /> Run Research
             </button>
           ) : (
             <button 
@@ -78,51 +75,53 @@ export default function ControlPanel({
               style={{ background: 'linear-gradient(135deg, var(--accent-red) 0%, #dc2626 100%)', boxShadow: '0 4px 14px rgba(220, 38, 38, 0.4)' }}
               onClick={onStop}
             >
-              <Square size={16} /> Abort
+              <Square size={15} /> Abort
             </button>
           )}
         </div>
 
-        {/* Collapsible Settings Panel */}
+        {/* Collapsible Compact Settings Panel */}
         {showSettings && (
           <div 
             style={{ 
               display: 'flex', 
               flexDirection: 'column', 
-              gap: '12px', 
-              padding: '16px', 
-              background: 'rgba(255,255,255,0.02)', 
+              gap: '8px', 
+              padding: '10px 14px', 
+              background: 'rgba(0,0,0,0.35)', 
               borderRadius: '8px',
               border: '1px solid var(--border-color)',
               animation: 'fadeIn 0.2s ease'
             }}
           >
-            <div className="settings-row">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Execution Mode</span>
+            <div className="settings-row" style={{ gap: '12px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Mode:</span>
                 <div className="toggle-group">
                   <button
                     type="button"
                     className={`toggle-btn ${mode === 'simulation' ? 'active' : ''}`}
                     onClick={() => setMode('simulation')}
                     disabled={isRunning}
+                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                   >
-                    Simulation Mode
+                    Simulation
                   </button>
                   <button
                     type="button"
                     className={`toggle-btn ${mode === 'real' ? 'active' : ''}`}
                     onClick={() => setMode('real')}
                     disabled={isRunning}
+                    style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                   >
-                    Real Agent Mode
+                    Real Agent
                   </button>
                 </div>
               </div>
 
               {mode === 'simulation' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', animation: 'fadeIn 0.2s ease' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Simulation Speed</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Speed:</span>
                   <div className="toggle-group">
                     {[
                       { label: '1x', value: 1 },
@@ -136,6 +135,7 @@ export default function ControlPanel({
                         className={`toggle-btn ${speed === opt.value ? 'active' : ''}`}
                         onClick={() => setSpeed(opt.value)}
                         disabled={isRunning}
+                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
                       >
                         {opt.label}
                       </button>
@@ -146,8 +146,8 @@ export default function ControlPanel({
 
               {mode === 'real' && (
                 <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>LLM Provider</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Provider:</span>
                     <div className="toggle-group">
                       <button
                         type="button"
@@ -157,9 +157,9 @@ export default function ControlPanel({
                           setModel('openai/gpt-oss-120b');
                         }}
                         disabled={isRunning}
-                        style={{ fontWeight: provider === 'groq' ? 700 : 500 }}
+                        style={{ padding: '4px 10px', fontSize: '0.75rem', fontWeight: provider === 'groq' ? 700 : 500 }}
                       >
-                        ⚡ Groq (Free & Fast)
+                        ⚡ Groq (Fast & Free)
                       </button>
                       <button
                         type="button"
@@ -169,6 +169,7 @@ export default function ControlPanel({
                           setModel('gemini-3.6-flash');
                         }}
                         disabled={isRunning}
+                        style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                       >
                         Gemini
                       </button>
@@ -180,21 +181,22 @@ export default function ControlPanel({
                           setModel('gpt-4o-mini');
                         }}
                         disabled={isRunning}
+                        style={{ padding: '4px 10px', fontSize: '0.75rem' }}
                       >
                         OpenAI
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '200px' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Model</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Model:</span>
                     <select
                       className="input-field"
                       style={{ 
-                        padding: '6px 10px', 
-                        height: '36px', 
-                        fontSize: '0.8rem',
-                        background: 'rgba(0, 0, 0, 0.4)',
+                        padding: '4px 8px', 
+                        height: '28px', 
+                        fontSize: '0.75rem',
+                        background: 'rgba(0, 0, 0, 0.5)',
                         border: '1px solid var(--border-color)',
                         borderRadius: '6px',
                         color: 'var(--text-primary)',
@@ -234,33 +236,35 @@ export default function ControlPanel({
               <div 
                 style={{ 
                   display: 'flex', 
-                  gap: '12px', 
+                  gap: '10px', 
                   flexWrap: 'wrap',
-                  animation: 'fadeIn 0.2s ease'
+                  marginTop: '2px'
                 }}
               >
-                <div style={{ flex: 1, minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Key size={12} /> {provider === 'groq' ? 'Groq API Key (Free at console.groq.com)' : (provider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key')}
+                <div style={{ flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                    <Key size={11} /> {provider === 'groq' ? 'Groq Key:' : (provider === 'gemini' ? 'Gemini Key:' : 'OpenAI Key:')}
                   </label>
                   <input
                     type="password"
                     className="input-field"
-                    placeholder={`Enter ${provider === 'groq' ? 'Groq' : (provider === 'gemini' ? 'Gemini' : 'OpenAI')} API Key...`}
+                    style={{ padding: '4px 8px', height: '28px', fontSize: '0.75rem' }}
+                    placeholder={`Enter ${provider === 'groq' ? 'Groq' : (provider === 'gemini' ? 'Gemini' : 'OpenAI')} Key (or leave blank to use backend .env)...`}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     disabled={isRunning}
                   />
                 </div>
 
-                <div style={{ flex: 1, minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Globe size={12} /> Tavily API Key (Optional)
+                <div style={{ flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                    <Globe size={11} /> Tavily Key (Opt):
                   </label>
                   <input
                     type="password"
                     className="input-field"
-                    placeholder="Enter Tavily Search Key (falls back to scraping)..."
+                    style={{ padding: '4px 8px', height: '28px', fontSize: '0.75rem' }}
+                    placeholder="Tavily Key (falls back to auto scraping)..."
                     value={tavilyKey}
                     onChange={(e) => setTavilyKey(e.target.value)}
                     disabled={isRunning}
@@ -269,16 +273,16 @@ export default function ControlPanel({
               </div>
             )}
             
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+              <span>
                 {mode === 'simulation' 
-                  ? '💡 Simulation Mode runs a realistic, cyclic multi-agent run with mock data. Zero API keys required.'
-                  : '⚡ Real Agent Mode spawns active LangGraph pipelines using live API calls and search scrapes.'}
-              </div>
+                  ? '💡 Simulation Mode runs an instant cyclic multi-agent run with mock data.'
+                  : '⚡ Real Agent Mode spawns active LangGraph multi-agent pipelines with live search.'}
+              </span>
               {mode === 'real' && (
-                <div style={{ color: 'var(--accent-cyan)', opacity: 0.85 }}>
-                  🔑 Tip: You can also set <code>GEMINI_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>TAVILY_API_KEY</code> in a <code>backend/.env</code> file to skip entering them here.
-                </div>
+                <span style={{ color: 'var(--accent-cyan)', opacity: 0.85 }}>
+                  🔑 Server environment keys in <code>backend/.env</code> are used automatically.
+                </span>
               )}
             </div>
           </div>
