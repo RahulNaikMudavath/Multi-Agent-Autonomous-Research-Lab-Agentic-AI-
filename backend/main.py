@@ -68,7 +68,12 @@ async def run_research_flow(run_id, query, mode, provider, api_key, tavily_key, 
                 await ws_proxy.send_text(state_str)
         else:
             # Real execution using LangGraph
-            provider_key_name = "GEMINI_API_KEY" if provider == "gemini" else "OPENAI_API_KEY"
+            provider_key_map = {
+                "gemini": "GEMINI_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "openai": "OPENAI_API_KEY"
+            }
+            provider_key_name = provider_key_map.get(provider, "GEMINI_API_KEY")
             effective_api_key = api_key or os.getenv(provider_key_name)
             effective_tavily_key = tavily_key or os.getenv("TAVILY_API_KEY")
             
@@ -198,7 +203,7 @@ async def websocket_research(websocket: WebSocket):
                 
                 query = data.get("query", "")
                 mode = data.get("mode", "simulation")
-                provider = data.get("provider", "gemini")
+                provider = data.get("provider", "groq")
                 model = data.get("model", "")
                 api_key = data.get("api_key", "")
                 tavily_key = data.get("tavily_key", "")
@@ -208,7 +213,12 @@ async def websocket_research(websocket: WebSocket):
                     await websocket.send_text(json.dumps({"error": "Query cannot be empty."}))
                     continue
                     
-                provider_key_name = "GEMINI_API_KEY" if provider == "gemini" else "OPENAI_API_KEY"
+                provider_key_map = {
+                    "gemini": "GEMINI_API_KEY",
+                    "groq": "GROQ_API_KEY",
+                    "openai": "OPENAI_API_KEY"
+                }
+                provider_key_name = provider_key_map.get(provider, "GEMINI_API_KEY")
                 effective_api_key = api_key or os.getenv(provider_key_name)
                 
                 if mode == "real" and not effective_api_key:

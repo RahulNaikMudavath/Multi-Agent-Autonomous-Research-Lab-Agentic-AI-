@@ -18,6 +18,13 @@ GEMINI_FALLBACK_MODELS = [
     "gemini-1.5-flash"
 ]
 
+GROQ_FALLBACK_MODELS = [
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-20b",
+    "groq/compound"
+]
+
 OPENAI_FALLBACK_MODELS = [
     "gpt-4o-mini",
     "gpt-4o"
@@ -43,15 +50,25 @@ def extract_text(content: Any) -> str:
 
 def get_llm(config: RunnableConfig, model_name: Optional[str] = None, max_output_tokens: int = 2048):
     configurable = config.get("configurable", {})
-    provider = configurable.get("provider", "gemini")
+    provider = configurable.get("provider", "groq")
     api_key = configurable.get("api_key", "")
     
-    if provider == "gemini":
+    if provider == "groq":
+        from langchain_openai import ChatOpenAI
+        effective_model = model_name or configurable.get("model") or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+        return ChatOpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            model=effective_model, 
+            openai_api_key=api_key or os.getenv("GROQ_API_KEY", ""),
+            temperature=0.1,
+            max_tokens=max_output_tokens
+        )
+    elif provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
         effective_model = model_name or configurable.get("model") or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
         return ChatGoogleGenerativeAI(
             model=effective_model, 
-            google_api_key=api_key,
+            google_api_key=api_key or os.getenv("GEMINI_API_KEY", ""),
             max_output_tokens=max_output_tokens
         )
     elif provider == "openai":
@@ -59,7 +76,7 @@ def get_llm(config: RunnableConfig, model_name: Optional[str] = None, max_output
         effective_model = model_name or configurable.get("model") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         return ChatOpenAI(
             model=effective_model, 
-            openai_api_key=api_key,
+            openai_api_key=api_key or os.getenv("OPENAI_API_KEY", ""),
             temperature=0.1,
             max_tokens=max_output_tokens
         )
@@ -78,15 +95,20 @@ async def call_llm_resilient(
     for 429 RESOURCE_EXHAUSTED / quota errors.
     """
     configurable = config.get("configurable", {})
-    provider = configurable.get("provider", "gemini")
-    initial_model = configurable.get("model") or (
-        os.getenv("GEMINI_MODEL", "gemini-2.5-flash") if provider == "gemini" else os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    )
-    if "3.6" in initial_model and provider == "gemini":
-        initial_model = "gemini-2.5-flash"
+    provider = configurable.get("provider", "groq")
+    
+    if provider == "groq":
+        initial_model = configurable.get("model") or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+        fallback_list = GROQ_FALLBACK_MODELS
+    elif provider == "gemini":
+        initial_model = configurable.get("model") or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+        fallback_list = GEMINI_FALLBACK_MODELS
+    else:
+        initial_model = configurable.get("model") or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        fallback_list = OPENAI_FALLBACK_MODELS
 
-    fallback_list = GEMINI_FALLBACK_MODELS if provider == "gemini" else OPENAI_FALLBACK_MODELS
     models_to_try = [initial_model] + [m for m in fallback_list if m != initial_model]
+
 
     last_err = None
     for model_idx, current_model in enumerate(models_to_try):

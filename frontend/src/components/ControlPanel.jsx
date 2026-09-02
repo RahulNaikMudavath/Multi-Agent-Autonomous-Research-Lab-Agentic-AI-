@@ -151,10 +151,22 @@ export default function ControlPanel({
                     <div className="toggle-group">
                       <button
                         type="button"
+                        className={`toggle-btn ${provider === 'groq' ? 'active' : ''}`}
+                        onClick={() => {
+                          setProvider('groq');
+                          setModel('openai/gpt-oss-120b');
+                        }}
+                        disabled={isRunning}
+                        style={{ fontWeight: provider === 'groq' ? 700 : 500 }}
+                      >
+                        ⚡ Groq (Free & Fast)
+                      </button>
+                      <button
+                        type="button"
                         className={`toggle-btn ${provider === 'gemini' ? 'active' : ''}`}
                         onClick={() => {
                           setProvider('gemini');
-                          if (!model || model.startsWith('gpt')) setModel('gemini-3.6-flash');
+                          setModel('gemini-3.6-flash');
                         }}
                         disabled={isRunning}
                       >
@@ -165,7 +177,7 @@ export default function ControlPanel({
                         className={`toggle-btn ${provider === 'openai' ? 'active' : ''}`}
                         onClick={() => {
                           setProvider('openai');
-                          if (!model || model.startsWith('gemini')) setModel('gpt-4o-mini');
+                          setModel('gpt-4o-mini');
                         }}
                         disabled={isRunning}
                       >
@@ -174,7 +186,7 @@ export default function ControlPanel({
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '200px' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Model</span>
                     <select
                       className="input-field"
@@ -188,11 +200,18 @@ export default function ControlPanel({
                         color: 'var(--text-primary)',
                         cursor: 'pointer'
                       }}
-                      value={model || (provider === 'gemini' ? 'gemini-3.6-flash' : 'gpt-4o-mini')}
+                      value={model || (provider === 'groq' ? 'openai/gpt-oss-120b' : (provider === 'gemini' ? 'gemini-3.6-flash' : 'gpt-4o-mini'))}
                       onChange={(e) => setModel(e.target.value)}
                       disabled={isRunning}
                     >
-                      {provider === 'gemini' ? (
+                      {provider === 'groq' ? (
+                        <>
+                          <option value="openai/gpt-oss-120b">openai/gpt-oss-120b (High Quality)</option>
+                          <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b (Ultra Fast)</option>
+                          <option value="openai/gpt-oss-20b">openai/gpt-oss-20b (Lightweight)</option>
+                          <option value="groq/compound">groq/compound (Compound AI)</option>
+                        </>
+                      ) : provider === 'gemini' ? (
                         <>
                           <option value="gemini-3.6-flash">gemini-3.6-flash (Recommended)</option>
                           <option value="gemini-2.5-flash">gemini-2.5-flash</option>
@@ -222,12 +241,12 @@ export default function ControlPanel({
               >
                 <div style={{ flex: 1, minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Key size={12} /> {provider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key'}
+                    <Key size={12} /> {provider === 'groq' ? 'Groq API Key (Free at console.groq.com)' : (provider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key')}
                   </label>
                   <input
                     type="password"
                     className="input-field"
-                    placeholder={`Enter ${provider === 'gemini' ? 'Gemini' : 'OpenAI'} API Key...`}
+                    placeholder={`Enter ${provider === 'groq' ? 'Groq' : (provider === 'gemini' ? 'Gemini' : 'OpenAI')} API Key...`}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     disabled={isRunning}
