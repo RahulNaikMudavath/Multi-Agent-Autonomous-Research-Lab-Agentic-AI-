@@ -8,6 +8,8 @@ export default function ControlPanel({
   setMode, 
   provider, 
   setProvider, 
+  model,
+  setModel,
   apiKey, 
   setApiKey, 
   tavilyKey, 
@@ -143,27 +145,69 @@ export default function ControlPanel({
               )}
 
               {mode === 'real' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>LLM Provider</span>
-                  <div className="toggle-group">
-                    <button
-                      type="button"
-                      className={`toggle-btn ${provider === 'gemini' ? 'active' : ''}`}
-                      onClick={() => setProvider('gemini')}
-                      disabled={isRunning}
-                    >
-                      Gemini
-                    </button>
-                    <button
-                      type="button"
-                      className={`toggle-btn ${provider === 'openai' ? 'active' : ''}`}
-                      onClick={() => setProvider('openai')}
-                      disabled={isRunning}
-                    >
-                      OpenAI
-                    </button>
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>LLM Provider</span>
+                    <div className="toggle-group">
+                      <button
+                        type="button"
+                        className={`toggle-btn ${provider === 'gemini' ? 'active' : ''}`}
+                        onClick={() => {
+                          setProvider('gemini');
+                          if (!model || model.startsWith('gpt')) setModel('gemini-3.6-flash');
+                        }}
+                        disabled={isRunning}
+                      >
+                        Gemini
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn ${provider === 'openai' ? 'active' : ''}`}
+                        onClick={() => {
+                          setProvider('openai');
+                          if (!model || model.startsWith('gemini')) setModel('gpt-4o-mini');
+                        }}
+                        disabled={isRunning}
+                      >
+                        OpenAI
+                      </button>
+                    </div>
                   </div>
-                </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '180px' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase' }}>Model</span>
+                    <select
+                      className="input-field"
+                      style={{ 
+                        padding: '6px 10px', 
+                        height: '36px', 
+                        fontSize: '0.8rem',
+                        background: 'rgba(0, 0, 0, 0.4)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer'
+                      }}
+                      value={model || (provider === 'gemini' ? 'gemini-3.6-flash' : 'gpt-4o-mini')}
+                      onChange={(e) => setModel(e.target.value)}
+                      disabled={isRunning}
+                    >
+                      {provider === 'gemini' ? (
+                        <>
+                          <option value="gemini-3.6-flash">gemini-3.6-flash (Recommended)</option>
+                          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                          <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                          <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="gpt-4o-mini">gpt-4o-mini (Fast / Efficient)</option>
+                          <option value="gpt-4o">gpt-4o (High Performance)</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                </>
               )}
             </div>
 

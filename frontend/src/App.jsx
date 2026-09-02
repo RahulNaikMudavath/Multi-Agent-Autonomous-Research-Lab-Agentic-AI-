@@ -11,6 +11,7 @@ export default function App() {
   const [query, setQuery] = useState(() => localStorage.getItem('research_query') || 'Compare the performance of PGVector vs. Milvus for 1M vectors');
   const [mode, setMode] = useState(() => localStorage.getItem('research_mode') || 'real');
   const [provider, setProvider] = useState(() => localStorage.getItem('research_provider') || 'gemini');
+  const [model, setModel] = useState(() => localStorage.getItem('research_model') || 'gemini-3.6-flash');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('research_api_key') || '');
   const [tavilyKey, setTavilyKey] = useState(() => localStorage.getItem('research_tavily_key') || '');
   const [speed, setSpeed] = useState(() => {
@@ -66,6 +67,7 @@ export default function App() {
         query,
         mode,
         provider,
+        model,
         api_key: apiKey,
         tavily_key: tavilyKey,
         speed
@@ -158,6 +160,10 @@ export default function App() {
   }, [provider]);
 
   useEffect(() => {
+    localStorage.setItem('research_model', model);
+  }, [model]);
+
+  useEffect(() => {
     localStorage.setItem('research_api_key', apiKey);
   }, [apiKey]);
 
@@ -220,6 +226,8 @@ export default function App() {
         setMode={setMode}
         provider={provider}
         setProvider={setProvider}
+        model={model}
+        setModel={setModel}
         apiKey={apiKey}
         setApiKey={setApiKey}
         tavilyKey={tavilyKey}

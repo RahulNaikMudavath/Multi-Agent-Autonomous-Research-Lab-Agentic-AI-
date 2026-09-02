@@ -55,7 +55,7 @@ class WebSocketProxy:
                 logger.error(f"Failed to send to websocket for run {self.run_id}: {str(e)}")
                 run["websocket"] = None
 
-async def run_research_flow(run_id, query, mode, provider, api_key, tavily_key, speed=1.0):
+async def run_research_flow(run_id, query, mode, provider, api_key, tavily_key, model=None, speed=1.0):
     ws_proxy = WebSocketProxy(run_id)
     queue = runs[run_id]["queue"]
     try:
@@ -85,10 +85,11 @@ async def run_research_flow(run_id, query, mode, provider, api_key, tavily_key, 
                 "awaiting_review": False
             }
             
+            model_info = f" [Model: {model}]" if model else ""
             state["logs"].append({
                 "agent": "System",
                 "status": "planning",
-                "message": f"Starting real execution using {provider.upper()}..."
+                "message": f"Starting real execution using {provider.upper()}{model_info}..."
             })
             if run_id in runs:
                 runs[run_id]["state"] = state
@@ -99,6 +100,7 @@ async def run_research_flow(run_id, query, mode, provider, api_key, tavily_key, 
                     "provider": provider,
                     "api_key": effective_api_key,
                     "tavily_key": effective_tavily_key,
+                    "model": model,
                     "websocket": ws_proxy,
                     "queue": queue
                 }
@@ -119,13 +121,23 @@ async def run_research_flow(run_id, query, mode, provider, api_key, tavily_key, 
                 await ws_proxy.send_text(json.dumps(state))
             
             # Final notification
-            state["active_agent"] = "Finalize"
-            state["awaiting_review"] = False
-            state["logs"].append({
-                "agent": "System",
-                "status": "completed",
-                "message": "Research task finished successfully."
-            })
+            has_report = bool(state.get("final_report") or state.get("draft_report"))
+            if has_report:
+                state["active_agent"] = "Finalize"
+                state["awaiting_review"] = False
+                state["logs"].append({
+                    "agent": "System",
+                    "status": "completed",
+                    "message": "Research task finished successfully."
+                })
+            else:
+                state["active_agent"] = "Error"
+                state["awaiting_review"] = False
+                state["logs"].append({
+                    "agent": "System",
+                    "status": "error",
+                    "message": "Research pipeline did not generate a final report due to upstream API notices."
+                })
             if run_id in runs:
                 runs[run_id]["state"] = state
             await ws_proxy.send_text(json.dumps(state))
@@ -187,6 +199,7 @@ async def websocket_research(websocket: WebSocket):
                 query = data.get("query", "")
                 mode = data.get("mode", "simulation")
                 provider = data.get("provider", "gemini")
+                model = data.get("model", "")
                 api_key = data.get("api_key", "")
                 tavily_key = data.get("tavily_key", "")
                 speed = data.get("speed", 1.0)
@@ -222,7 +235,7 @@ async def websocket_research(websocket: WebSocket):
                 prune_runs()
                 
                 task = asyncio.create_task(
-                    run_research_flow(run_id, query, mode, provider, api_key, tavily_key, speed)
+                    run_research_flow(run_id, query, mode, provider, api_key, tavily_key, model=model, speed=speed)
                 )
                 runs[run_id]["task"] = task
                 
